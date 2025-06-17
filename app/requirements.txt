@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+ocrmypdf
+tesseract
+pymupdf
+pdf2image
+numpy
+requests 
