@@ -30,6 +30,9 @@ COPY ./models /app/models
 # Copy application code
 COPY app/ .
 
+# Copy migrations
+COPY migrations/ /app/migrations/
+
 # Create data directory
 RUN mkdir -p /data
 
