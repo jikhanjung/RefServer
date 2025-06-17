@@ -9,6 +9,7 @@ import json
 import time
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -347,7 +348,9 @@ class RefServerAPITester:
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import letter
             
-            test_pdf_path = "/tmp/test_paper.pdf"
+            # Use tempfile for cross-platform compatibility
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                test_pdf_path = tmp_file.name
             
             c = canvas.Canvas(test_pdf_path, pagesize=letter)
             c.drawString(100, 750, "Test Academic Paper")
