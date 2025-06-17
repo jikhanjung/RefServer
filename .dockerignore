@@ -38,6 +38,3 @@ Thumbs.db
 
 # Migration script (not needed in container)
 migrate.py
-
-# Download script (not needed in container)
-download_model.py
