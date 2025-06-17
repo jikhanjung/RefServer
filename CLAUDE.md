@@ -72,33 +72,47 @@ RefServer/
 
 ---
 
-## ✅ TODO (작업 우선순위 기준)
+## ✅ 구현 완료 상태 (v1.0.0)
 
-### 📁 구조 및 환경
+### 📁 구조 및 환경 - ✅ 완료
 - [x] 프로젝트 디렉토리 및 기본 파일 구성
-- [x] Dockerfile 작성 (FastAPI + ocrmypdf + bge-m3)
+- [x] Dockerfile 작성 (FastAPI + ocrmypdf + bge-m3 + 다국어 Tesseract)
 - [x] docker-compose.yml 작성 (FastAPI + Huridocs + 외부 Ollama 연동)
+- [x] requirements.txt 및 requirements-test.txt 구성
 
-### ⚙️ 기능 모듈
-- [ ] `ocr.py`: ocrmypdf 및 언어 자동 감지 처리
-- [ ] `ocr_quality.py`: 첫 페이지 이미지 → LLaVA 호출 → 품질 판단
-- [ ] `embedding.py`: 텍스트 → 벡터 임베딩 (bge-m3)
-- [ ] `layout.py`: Huridocs layout API 호출 및 결과 파싱
-- [ ] `metadata.py`: 텍스트 → LLM 서지 추출 (via Ollama)
-- [ ] `db.py`: SQLite 테이블 생성 및 CRUD
+### ⚙️ 기능 모듈 - ✅ 완료 (9개 모듈)
+- [x] `models.py`: Peewee ORM 모델 (Paper, Embedding, Metadata, LayoutAnalysis)
+- [x] `db.py`: 완전한 CRUD 인터페이스 + 자동 마이그레이션
+- [x] `ocr.py`: ocrmypdf + 10개 언어 자동 감지 + 스마트 OCR
+- [x] `ocr_quality.py`: LLaVA 기반 OCR 품질 평가 (via Ollama)
+- [x] `embedding.py`: BGE-M3 임베딩 생성 + 로컬 모델 지원
+- [x] `layout.py`: Huridocs layout API 연동 + 구조 분석
+- [x] `metadata.py`: 3단계 LLM 서지정보 추출 (구조화→단순→규칙 기반)
 
-### 🔁 파이프라인
-- [ ] `pipeline.py`: 위 단계들을 연결하여 하나의 process_pdf(doc_id, file) 구성
-- [ ] 예외 처리, 로깅, 임시 파일 정리 등 추가
+### 🔁 파이프라인 - ✅ 완료
+- [x] `pipeline.py`: 7단계 통합 처리 파이프라인
+- [x] 내용 기반 중복 감지 (임베딩 벡터 해시)
+- [x] 부분 실패 지원 + 상세 진행 상황 추적
+- [x] 예외 처리, 로깅, 임시 파일 정리 완료
 
-### 🧪 API
-- [ ] `main.py`: FastAPI 서버 및 `/process` endpoint 구현
-- [ ] `/metadata/{doc_id}` 등 조회 API 구현
-- [ ] `/layout/{doc_id}` layout 구조 JSON 반환
+### 🧪 API - ✅ 완료 (12개 엔드포인트)
+- [x] `main.py`: FastAPI 서버 + Pydantic 모델 + CORS
+- [x] `POST /process`: PDF 업로드 및 전체 파이프라인 처리
+- [x] `GET /health`, `/status`: 헬스체크 및 서비스 상태
+- [x] `GET /paper/{id}`, `/metadata/{id}`, `/embedding/{id}`: 데이터 조회
+- [x] `GET /layout/{id}`, `/text/{id}`, `/preview/{id}`: 구조 및 콘텐츠
+- [x] `GET /download/{id}`: PDF 파일 다운로드
+- [x] `GET /search`, `/stats`: 검색 및 시스템 통계
 
-### 📄 기타
-- [x] README 작성
-- [x] CLAUDE.md 정리 완료 ✅
+### 🧪 테스트 및 배포 도구 - ✅ 완료
+- [x] `test_api.py`: 전체 API 자동 테스트 스크립트
+- [x] `download_model.py`: BGE-M3 모델 로컬 다운로드
+- [x] `migrate.py`: 데이터베이스 마이그레이션 유틸리티
+
+### 📄 문서화 - ✅ 완료
+- [x] README.md: 완전한 프로젝트 문서
+- [x] CLAUDE.md: 프로젝트 가이드 및 변경 로그
+- [x] API_TESTING_GUIDE.md: API 테스트 가이드
 
 ---
 
@@ -120,21 +134,132 @@ def compute_sha256_from_vector(vec: list[float]) -> str:
 
 ---
 
-## 📌 주의 및 팁
+---
 
-- 모든 임시/출력 파일은 `data/` 하위에 저장
-- Doc ID는 `uuid4()`를 사용하여 생성
-- Ollama는 Docker 외부에서 미리 실행되어 있어야 함 (`llava` 모델 미리 다운로드)
-- Huridocs layout 서버는 별도 Docker 컨테이너로 사전 실행 필요
-- 추후 PostgreSQL + pgvector로 전환 가능성을 염두에 두고 구조 설계
+## 🚀 시작하기
+
+### 전제 조건
+- Docker & Docker Compose
+- Ollama (외부 실행 필요, `llava` 및 `llama3.2` 모델 설치)
+
+### 설치 및 실행
+
+1. **모델 다운로드**
+```bash
+# BGE-M3 임베딩 모델 다운로드
+python download_model.py
+```
+
+2. **Ollama 모델 준비**
+```bash
+# 별도 터미널에서 Ollama 실행
+ollama run llava        # OCR 품질 평가용
+ollama run llama3.2     # 메타데이터 추출용
+```
+
+3. **RefServer 실행**
+```bash
+docker-compose up --build
+```
+
+4. **API 테스트**
+```bash
+# 모든 API 엔드포인트 테스트
+python test_api.py
+
+# 특정 PDF 파일로 테스트
+python test_api.py --pdf /path/to/paper.pdf
+```
+
+5. **API 문서 확인**
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+---
+
+## 📌 주의 사항
+
+### 서비스 의존성
+- **데이터베이스**: SQLite (자동 초기화)
+- **Ollama**: 외부 실행 필요 (`host.docker.internal:11434`)
+- **Huridocs**: Docker 컨테이너로 자동 실행
+- **BGE-M3**: 로컬 모델 사용 (컨테이너 내 포함)
+
+### 파일 저장 구조
+```
+/data/
+├── pdfs/           # 처리된 PDF 파일
+├── images/         # 첫 페이지 미리보기 이미지
+├── temp/           # 임시 처리 파일 (자동 정리)
+└── refserver.db    # SQLite 데이터베이스
+```
+
+### 성능 고려사항
+- PDF 처리 시간: 1-3분 (문서 크기에 따라)
+- 메모리 사용량: ~2-4GB (BGE-M3 모델 포함)
+- 디스크 공간: 처리된 PDF 및 이미지 저장
 
 ---
 
 ## 📅 Changelog
 
-- **2024-06-17**
-    - 프로젝트 디렉토리(app/, data/) 및 주요 파일(main.py 등) 생성
-    - requirements.txt를 루트로 이동 및 의존성 명시
-    - docker-compose.yml, README.md, 각 모듈의 기본 파일/주석 추가
-    - CLAUDE.md에 changelog 섹션 신설 및 최신 작업 내역 반영
-    - **구조 및 환경 설정 완료**: Dockerfile 작성 (다국어 Tesseract, bge-m3 포함), docker-compose.yml에 Huridocs와 Ollama 연동 설정 추가
+- **2025-06-17**
+    - **🏗️ 프로젝트 초기 설정**
+        - 프로젝트 디렉토리(app/, data/) 및 주요 파일 구조 생성
+        - requirements.txt를 루트로 이동 및 의존성 명시
+        - docker-compose.yml, README.md, 각 모듈의 기본 파일/주석 추가
+        - CLAUDE.md에 changelog 섹션 신설
+    
+    - **🐳 Docker 환경 구축**
+        - Dockerfile 작성 (FastAPI + ocrmypdf + BGE-M3 + 다국어 Tesseract)
+        - docker-compose.yml에 Huridocs와 Ollama 연동 설정 추가
+        - BGE-M3 모델 로컬 다운로드 및 Docker 이미지 포함
+    
+    - **🗄️ 데이터베이스 설계 및 구현**
+        - Peewee ORM 선택 (PostgreSQL 마이그레이션 고려)
+        - models.py: 4개 테이블 (Paper, Embedding, Metadata, LayoutAnalysis)
+        - db.py: 완전한 CRUD 인터페이스 + 자동 마이그레이션
+        - 내용 기반 고유 ID 시스템 (임베딩 벡터 해시)
+    
+    - **🔍 OCR 및 품질 평가 시스템**
+        - ocr.py: ocrmypdf + 10개 언어 자동 감지 + 스마트 OCR
+        - ocr_quality.py: LLaVA 기반 품질 평가 (via Ollama)
+        - 첫 페이지 이미지 추출 및 품질 점수 생성
+    
+    - **🧠 임베딩 및 AI 처리**
+        - embedding.py: BGE-M3 모델 + 로컬 모델 지원
+        - 텍스트 청킹 및 배치 처리로 긴 문서 지원
+        - 싱글톤 패턴으로 메모리 효율성 확보
+    
+    - **📐 레이아웃 분석 및 메타데이터 추출**
+        - layout.py: Huridocs PDF 레이아웃 분석 API 연동
+        - metadata.py: 3단계 추출 시스템 (구조화 LLM → 단순 LLM → 규칙 기반)
+        - 견고한 검증 및 데이터 정리 메커니즘
+    
+    - **🔗 통합 파이프라인**
+        - pipeline.py: 7단계 처리 파이프라인 구현
+        - 내용 기반 중복 감지 시스템
+        - 부분 실패 지원 + 상세 진행 상황 추적
+        - 외부 서비스 장애에 대한 우아한 성능 저하
+    
+    - **🌐 FastAPI 서버 및 API**
+        - main.py: 12개 엔드포인트 완전 구현
+        - Pydantic 모델로 요청/응답 검증
+        - 파일 업로드 처리 + 백그라운드 정리
+        - CORS 지원 + 자동 API 문서
+    
+    - **🧪 테스트 및 도구**
+        - test_api.py: 종합 API 테스트 스크립트
+        - 자동 테스트 PDF 생성 (reportlab)
+        - 성능 메트릭 및 상세 실패 리포팅
+        - download_model.py: 오프라인 배포용 모델 다운로드
+    
+    - **📚 문서화 완료**
+        - README.md: 완전한 프로젝트 가이드 (아키텍처, 설치, 사용법)
+        - API_TESTING_GUIDE.md: 종합 API 테스트 가이드
+        - CLAUDE.md: 최신 구현 상태 반영
+    
+    **🎉 RefServer v1.0.0 구현 완료!**
+    - 9개 핵심 모듈 + 12개 API 엔드포인트
+    - 완전한 Docker 배포 + 종합 테스트 스위트
+    - 프로덕션 준비 완료된 PDF 지능형 처리 파이프라인

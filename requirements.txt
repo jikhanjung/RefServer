@@ -5,4 +5,11 @@ tesseract
 pymupdf
 pdf2image
 numpy
-requests 
+requests
+peewee
+peewee-migrate
+langdetect
+torch
+transformers
+pillow
+sentence-transformers 

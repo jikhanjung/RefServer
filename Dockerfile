@@ -24,12 +24,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install additional dependencies for bge-m3
-RUN pip install --no-cache-dir \
-    sentence-transformers \
-    torch \
-    transformers \
-    FlagEmbedding
+# Copy pre-downloaded models (if available)
+COPY ./models /app/models
 
 # Copy application code
 COPY app/ .
