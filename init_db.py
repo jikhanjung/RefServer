@@ -8,10 +8,8 @@ import os
 import sys
 import logging
 
-# Add app directory to path
-sys.path.insert(0, '/app')
-
-from app.db import initialize_database
+# Import from current directory (app files are copied to /app)
+from db import initialize_database
 
 # Configure logging
 logging.basicConfig(
