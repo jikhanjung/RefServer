@@ -42,9 +42,12 @@ class RefServerAPITester:
         timestamp = time.strftime("%H:%M:%S")
         print(f"[{timestamp}] {level}: {message}")
     
-    def assert_response(self, response: requests.Response, expected_status: int = 200, test_name: str = ""):
+    def assert_response(self, response: requests.Response, expected_status = 200, test_name: str = ""):
         """Assert response status and log result"""
-        success = response.status_code == expected_status
+        if isinstance(expected_status, list):
+            success = response.status_code in expected_status
+        else:
+            success = response.status_code == expected_status
         
         test_result = {
             'name': test_name,
