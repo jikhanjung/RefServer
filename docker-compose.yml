@@ -9,7 +9,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434
-      - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5000
+      - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060
     depends_on:
       - huridocs-layout
     extra_hosts:
@@ -20,6 +20,6 @@ services:
     image: honestjung/pdf-layout-custom:latest # model files included in the docker image
     container_name: huridocs-layout
     ports:
-      - "5000:5000"
+      - "5000:5060"  # Map external 5000 to internal 5060
     environment:
       - WORKERS=2 
