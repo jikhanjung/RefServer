@@ -76,8 +76,8 @@ RefServer/
 
 ### 📁 구조 및 환경
 - [x] 프로젝트 디렉토리 및 기본 파일 구성
-- [ ] Dockerfile 작성 (FastAPI + ocrmypdf + bge-m3)
-- [ ] docker-compose.yml 작성 (FastAPI + Huridocs + 외부 Ollama 연동)
+- [x] Dockerfile 작성 (FastAPI + ocrmypdf + bge-m3)
+- [x] docker-compose.yml 작성 (FastAPI + Huridocs + 외부 Ollama 연동)
 
 ### ⚙️ 기능 모듈
 - [ ] `ocr.py`: ocrmypdf 및 언어 자동 감지 처리
@@ -137,3 +137,4 @@ def compute_sha256_from_vector(vec: list[float]) -> str:
     - requirements.txt를 루트로 이동 및 의존성 명시
     - docker-compose.yml, README.md, 각 모듈의 기본 파일/주석 추가
     - CLAUDE.md에 changelog 섹션 신설 및 최신 작업 내역 반영
+    - **구조 및 환경 설정 완료**: Dockerfile 작성 (다국어 Tesseract, bge-m3 포함), docker-compose.yml에 Huridocs와 Ollama 연동 설정 추가
