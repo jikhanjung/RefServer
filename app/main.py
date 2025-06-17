@@ -13,7 +13,7 @@ from pydantic import BaseModel
 # Import processing modules
 from pipeline import process_uploaded_pdf, check_all_services
 from db import (
-    initialize_database, get_paper_by_id, get_metadata_by_id, 
+    get_paper_by_id, get_metadata_by_id, 
     get_embedding_by_id, get_layout_by_id
 )
 
@@ -91,16 +91,9 @@ class LayoutInfo(BaseModel):
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and services on startup"""
+    """Check services on startup"""
     try:
         logger.info("Starting RefServer...")
-        
-        # Initialize database
-        success = initialize_database()
-        if success:
-            logger.info("Database initialized successfully")
-        else:
-            logger.error("Database initialization failed")
         
         # Check service status
         status = check_all_services()

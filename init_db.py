@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""
+Database initialization script for RefServer
+Run this once during Docker container setup
+"""
+
+import os
+import sys
+import logging
+
+# Add app directory to path
+sys.path.insert(0, '/app')
+
+from app.db import initialize_database
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+def main():
+    """Initialize database with migrations"""
+    try:
+        logger.info("Starting database initialization...")
+        
+        success = initialize_database()
+        
+        if success:
+            logger.info("Database initialization completed successfully")
+            sys.exit(0)
+        else:
+            logger.error("Database initialization failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

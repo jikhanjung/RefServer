@@ -30,11 +30,15 @@ COPY ./models /app/models
 # Copy application code
 COPY app/ .
 
-# Copy migrations
+# Copy migrations and init script
 COPY migrations/ /app/migrations/
+COPY init_db.py /app/
 
 # Create data directory
 RUN mkdir -p /data
+
+# Initialize database during build
+RUN python /app/init_db.py
 
 # Expose port
 EXPOSE 8000
