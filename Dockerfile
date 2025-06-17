@@ -24,8 +24,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy pre-downloaded models (if available)
-COPY ./models /app/models
+# Copy model download script and download BGE-M3 model
+COPY download_model.py .
+RUN python download_model.py
 
 # Copy application code
 COPY app/ .
