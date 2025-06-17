@@ -17,7 +17,8 @@ services:
       - "host.docker.internal:host-gateway"
 
   huridocs-layout:
-    image: huridocs/pdf-document-layout-analysis:latest
+    #image: huridocs/pdf-document-layout-analysis:v0.0.23
+    image: honestjung/pdf-layout-custom:latest # model files included in the docker image
     container_name: huridocs-layout
     ports:
       - "5000:5000"
