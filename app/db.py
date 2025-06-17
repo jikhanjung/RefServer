@@ -1,7 +1,7 @@
 import os
 import logging
 from peewee_migrate import Router
-from .models import *
+from models import *
 
 logger = logging.getLogger(__name__)
 

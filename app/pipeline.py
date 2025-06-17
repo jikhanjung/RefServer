@@ -8,16 +8,16 @@ from pathlib import Path
 import time
 
 # Import all processing modules
-from .ocr import process_pdf_with_ocr
-from .ocr_quality import assess_document_quality, is_quality_assessment_available
-from .embedding import generate_text_embedding
-from .layout import analyze_pdf_layout, is_layout_service_available
-from .metadata import extract_paper_metadata, is_metadata_service_available
-from .db import (
+from ocr import process_pdf_with_ocr
+from ocr_quality import assess_document_quality, is_quality_assessment_available
+from embedding import generate_text_embedding
+from layout import analyze_pdf_layout, is_layout_service_available
+from metadata import extract_paper_metadata, is_metadata_service_available
+from db import (
     initialize_database, save_paper, save_embedding, save_metadata, 
     save_layout_analysis, update_ocr_quality, get_paper_by_content_id
 )
-from .models import compute_content_id
+from models import compute_content_id
 
 logger = logging.getLogger(__name__)
 

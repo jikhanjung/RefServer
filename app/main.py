@@ -11,8 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Import processing modules
-from .pipeline import process_uploaded_pdf, check_all_services
-from .db import (
+from pipeline import process_uploaded_pdf, check_all_services
+from db import (
     initialize_database, get_paper_by_id, get_metadata_by_id, 
     get_embedding_by_id, get_layout_by_id
 )
