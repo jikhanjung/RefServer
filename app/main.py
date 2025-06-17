@@ -360,7 +360,7 @@ async def search_papers(
     """Search papers by various criteria"""
     try:
         # This is a basic implementation - can be enhanced with vector similarity search
-        from .models import Paper, Metadata
+        from models import Paper, Metadata
         
         query = Paper.select()
         
@@ -410,7 +410,7 @@ async def search_papers(
 async def get_statistics():
     """Get system statistics"""
     try:
-        from .models import Paper, Metadata, Embedding, LayoutAnalysis
+        from models import Paper, Metadata, Embedding, LayoutAnalysis
         
         # Count records
         total_papers = Paper.select().count()
