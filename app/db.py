@@ -12,21 +12,23 @@ def initialize_database():
     """
     try:
         # Ensure data directory exists
-        data_dir = os.path.dirname(DATABASE_PATH)
+        data_dir = '/data'
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
             logger.info(f"Created data directory: {data_dir}")
         
         # Ensure migrations directory exists
-        project_root = os.path.dirname(os.path.dirname(__file__))
-        migrations_path = os.path.join(project_root, 'migrations')
+        migrations_path = '/app/migrations'
         if not os.path.exists(migrations_path):
             os.makedirs(migrations_path)
             logger.info(f"Created migrations directory: {migrations_path}")
         
-        # Connect to database
-        db.connect()
-        logger.info(f"Connected to database: {DATABASE_PATH}")
+        # Connect to database if not already connected
+        if db.is_closed():
+            db.connect()
+            logger.info(f"Connected to database: {DATABASE_PATH}")
+        else:
+            logger.info(f"Database already connected: {DATABASE_PATH}")
         
         # Initialize migration router
         router = Router(db, migrate_dir=migrations_path)

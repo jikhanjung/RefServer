@@ -10,7 +10,7 @@ import os
 logger = logging.getLogger("RefServerModels")
 
 # Database setup
-DATABASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'refserver.db')
+DATABASE_PATH = os.path.join('/data', 'refserver.db')
 db = SqliteDatabase(DATABASE_PATH, pragmas={'foreign_keys': 1})
 
 class BaseModel(Model):
