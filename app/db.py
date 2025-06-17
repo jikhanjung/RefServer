@@ -18,7 +18,8 @@ def initialize_database():
             logger.info(f"Created data directory: {data_dir}")
         
         # Ensure migrations directory exists
-        migrations_path = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        migrations_path = os.path.join(project_root, 'migrations')
         if not os.path.exists(migrations_path):
             os.makedirs(migrations_path)
             logger.info(f"Created migrations directory: {migrations_path}")
