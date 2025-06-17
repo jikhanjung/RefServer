@@ -102,6 +102,7 @@ open http://localhost:8000/docs
 - ✅ PDF 업로드 및 전체 파이프라인 처리
 - ✅ OCR + 10개 언어 자동 감지
 - ✅ BGE-M3 임베딩 생성 (1024차원)
+- ✅ Huridocs 레이아웃 분석 (포트 수정 완료)
 - ✅ LLM 기반 메타데이터 추출
 - ✅ 중복 컨텐츠 감지 시스템
 - ✅ 모든 API 엔드포인트 응답
@@ -174,7 +175,7 @@ graph TD
 ```bash
 # Docker Compose 환경변수
 OLLAMA_HOST=host.docker.internal:11434    # Ollama 서버 주소
-HURIDOCS_LAYOUT_URL=http://huridocs-layout:5000  # Huridocs 서비스
+HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Huridocs 서비스 (내부 포트 5060)
 
 # 데이터 볼륨
 ./data:/data    # 호스트 data 디렉토리를 컨테이너에 마운트
