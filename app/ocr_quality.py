@@ -22,6 +22,15 @@ class LLaVAQualityAssessor:
             ollama_host: str, Ollama server host (default from env)
         """
         self.ollama_host = ollama_host or os.getenv('OLLAMA_HOST', 'localhost:11434')
+        
+        # Check if service is disabled
+        if (self.ollama_host.lower() in ['disabled', 'false', 'none', ''] or 
+            os.getenv('LLAVA_ENABLED', 'true').lower() in ['false', 'disabled', 'no']):
+            self.enabled = False
+            logger.info("LLaVA quality assessment disabled (CPU-only mode or explicitly disabled)")
+            return
+        
+        self.enabled = True
         if not self.ollama_host.startswith('http'):
             self.ollama_host = f"http://{self.ollama_host}"
         
@@ -219,6 +228,11 @@ Be specific about any issues you observe and provide actionable recommendations.
         Returns:
             Dict: quality assessment results
         """
+        # Check if service is enabled
+        if not getattr(self, 'enabled', True):
+            logger.info("LLaVA quality assessment skipped (disabled)")
+            return self._create_default_assessment()
+            
         try:
             if not os.path.exists(image_path):
                 logger.error(f"Image file not found: {image_path}")

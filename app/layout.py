@@ -21,6 +21,14 @@ class HuridocsLayoutAnalyzer:
             service_url: str, Huridocs layout service URL (default from env)
         """
         self.service_url = service_url or os.getenv('HURIDOCS_LAYOUT_URL', 'http://huridocs-layout:5000')
+        
+        # Check if service is disabled
+        if self.service_url.lower() in ['disabled', 'false', 'none', '']:
+            self.enabled = False
+            logger.info("Huridocs layout analysis disabled (CPU-only mode)")
+            return
+        
+        self.enabled = True
         self.analyze_url = f"{self.service_url}/"  # Main endpoint is POST /
         self.status_url = f"{self.service_url}/info"  # Status endpoint is /info
         
@@ -33,6 +41,11 @@ class HuridocsLayoutAnalyzer:
         Returns:
             bool: True if service is healthy
         """
+        # Check if service is enabled
+        if not getattr(self, 'enabled', True):
+            logger.info("Huridocs layout service is disabled")
+            return False
+            
         try:
             response = requests.get(self.status_url, timeout=10)
             
@@ -58,6 +71,11 @@ class HuridocsLayoutAnalyzer:
         Returns:
             Dict: layout analysis results
         """
+        # Check if service is enabled
+        if not getattr(self, 'enabled', True):
+            logger.info("Huridocs layout analysis skipped (disabled)")
+            return self._create_disabled_result()
+            
         try:
             if not os.path.exists(pdf_path):
                 logger.error(f"PDF file not found: {pdf_path}")
@@ -201,6 +219,28 @@ class HuridocsLayoutAnalyzer:
                 'service': 'huridocs',
                 'timestamp': time.time(),
                 'error': True
+            }
+        }
+    
+    def _create_disabled_result(self) -> Dict:
+        """
+        Create result when service is disabled
+        
+        Returns:
+            Dict: disabled service result structure
+        """
+        return {
+            'success': False,
+            'error': 'Layout analysis service disabled (CPU-only mode)',
+            'page_count': 0,
+            'total_elements': 0,
+            'element_types': {},
+            'pages': [],
+            'processing_info': {
+                'service': 'huridocs',
+                'timestamp': time.time(),
+                'status': 'disabled',
+                'reason': 'CPU-only mode - layout analysis requires GPU acceleration'
             }
         }
     

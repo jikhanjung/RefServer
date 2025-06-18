@@ -22,6 +22,14 @@ class MetadataExtractor:
             model_name: str, LLM model name to use
         """
         self.ollama_host = ollama_host or os.getenv('OLLAMA_HOST', 'localhost:11434')
+        
+        # Check if service is disabled (metadata extraction works fine on CPU)
+        if self.ollama_host.lower() in ['disabled', 'false', 'none', '']:
+            self.enabled = False
+            logger.info("Metadata extraction disabled - will use rule-based fallback")
+            return
+        
+        self.enabled = True
         if not self.ollama_host.startswith('http'):
             self.ollama_host = f"http://{self.ollama_host}"
         
@@ -115,6 +123,11 @@ Be concise and accurate."""
         Returns:
             Dict: extracted metadata
         """
+        # Check if service is enabled
+        if not getattr(self, 'enabled', True):
+            logger.info("LLM metadata extraction disabled - using rule-based fallback")
+            return self._extract_metadata_rule_based(text_content)
+            
         try:
             if not text_content or len(text_content.strip()) < 100:
                 logger.warning("Text content too short for metadata extraction")
@@ -504,6 +517,119 @@ Be concise and accurate."""
             metadata['error'] = error
         
         return metadata
+    
+    def _extract_metadata_rule_based(self, text_content: str) -> Dict:
+        """
+        Rule-based metadata extraction fallback (when LLM is disabled)
+        
+        Args:
+            text_content: str, extracted text from PDF
+            
+        Returns:
+            Dict: extracted metadata using simple rules
+        """
+        metadata = self._create_empty_metadata()
+        metadata['extraction_method'] = 'rule_based_fallback'
+        
+        try:
+            # Split into lines for processing
+            lines = text_content.split('\n')
+            first_page_lines = lines[:50]  # Focus on first page
+            
+            # Try to extract title (usually in first few lines, often in caps or title case)
+            title = self._extract_title_rule_based(first_page_lines)
+            if title:
+                metadata['title'] = title
+                metadata['success'] = True
+            
+            # Try to extract authors (look for patterns like "By", "Author:", etc.)
+            authors = self._extract_authors_rule_based(first_page_lines)
+            if authors:
+                metadata['authors'] = authors
+            
+            # Try to extract year (4-digit number that looks like a year)
+            year = self._extract_year_rule_based(text_content)
+            if year:
+                metadata['year'] = year
+            
+            # Try to extract DOI
+            doi = self._extract_doi_rule_based(text_content)
+            if doi:
+                metadata['doi'] = doi
+            
+            # Try to extract abstract
+            abstract = self._extract_abstract_rule_based(text_content)
+            if abstract:
+                metadata['abstract'] = abstract[:500]  # Limit length
+            
+            logger.info(f"Rule-based extraction completed. Found: title={bool(title)}, authors={len(authors)}, year={bool(year)}")
+            
+        except Exception as e:
+            logger.error(f"Error in rule-based extraction: {e}")
+            metadata['error'] = f"Rule-based extraction failed: {str(e)}"
+        
+        return metadata
+    
+    def _extract_title_rule_based(self, lines: List[str]) -> Optional[str]:
+        """Extract title using simple rules"""
+        for i, line in enumerate(lines[:10]):  # Check first 10 lines
+            line = line.strip()
+            if len(line) > 10 and len(line) < 200:
+                # Skip common header patterns
+                if any(skip in line.lower() for skip in ['page', 'copyright', 'doi:', 'issn', 'isbn', 'vol', 'journal']):
+                    continue
+                # Look for title-like patterns
+                if (line.isupper() or line.istitle()) and not line.endswith('.'):
+                    return line
+        return None
+    
+    def _extract_authors_rule_based(self, lines: List[str]) -> List[str]:
+        """Extract authors using simple rules"""
+        authors = []
+        for line in lines[:20]:
+            line = line.strip()
+            # Look for author patterns
+            if any(pattern in line.lower() for pattern in ['author', 'by ', 'written by']):
+                # Extract names after the pattern
+                for pattern in ['author:', 'authors:', 'by ', 'written by']:
+                    if pattern in line.lower():
+                        author_text = line.split(pattern, 1)[1].strip()
+                        # Simple name extraction
+                        if author_text and len(author_text) < 100:
+                            authors.extend([name.strip() for name in author_text.split(',') if name.strip()])
+                        break
+        return authors[:5]  # Limit to 5 authors
+    
+    def _extract_year_rule_based(self, text: str) -> Optional[int]:
+        """Extract year using regex"""
+        import re
+        # Look for 4-digit years between 1900-2030
+        years = re.findall(r'\b(19\d\d|20[0-3]\d)\b', text)
+        if years:
+            # Return the most recent reasonable year
+            valid_years = [int(year) for year in years if 1980 <= int(year) <= 2030]
+            return max(valid_years) if valid_years else None
+        return None
+    
+    def _extract_doi_rule_based(self, text: str) -> Optional[str]:
+        """Extract DOI using regex"""
+        import re
+        # DOI pattern
+        doi_pattern = r'(?:doi:|DOI:?)\s*(10\.\d+/[^\s]+)'
+        match = re.search(doi_pattern, text, re.IGNORECASE)
+        return match.group(1) if match else None
+    
+    def _extract_abstract_rule_based(self, text: str) -> Optional[str]:
+        """Extract abstract using simple rules"""
+        import re
+        # Look for abstract section
+        abstract_pattern = r'(?:abstract|ABSTRACT)[:\s]*\n(.*?)(?:\n\s*(?:keywords|KEYWORDS|introduction|INTRODUCTION|\d+\.|references|REFERENCES))'
+        match = re.search(abstract_pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            abstract = match.group(1).strip()
+            if 50 < len(abstract) < 2000:  # Reasonable abstract length
+                return abstract
+        return None
     
     def check_ollama_connection(self) -> bool:
         """
