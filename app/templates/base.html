@@ -80,16 +80,18 @@
                 </div>
                 {% endif %}
 
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+                {% if request.query_params.get('message') %}
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        {{ request.query_params.get('message') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
+                {% if request.query_params.get('error') %}
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ request.query_params.get('error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
 
                 {% block content %}{% endblock %}
             </main>
