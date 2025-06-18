@@ -33,6 +33,79 @@ class Paper(BaseModel):
             (('content_id',), False),
         )
 
+
+class ProcessingJob(BaseModel):
+    """Model for tracking PDF processing job status"""
+    job_id = CharField(primary_key=True)  # UUID4 job identifier
+    paper = ForeignKeyField(Paper, backref='processing_jobs', null=True, on_delete='CASCADE')
+    filename = CharField()  # Original filename
+    status = CharField(default='uploaded')  # uploaded, processing, completed, failed
+    current_step = CharField(null=True)  # Current processing step
+    progress_percentage = IntegerField(default=0)  # Progress 0-100
+    steps_completed = TextField(default='[]')  # JSON array of completed steps
+    steps_failed = TextField(default='[]')  # JSON array of failed steps
+    error_message = TextField(null=True)  # Error details if failed
+    result_summary = TextField(null=True)  # JSON summary of processing results
+    created_at = DateTimeField(default=datetime.datetime.now)
+    started_at = DateTimeField(null=True)  # When processing started
+    completed_at = DateTimeField(null=True)  # When processing finished
+    
+    def get_steps_completed(self):
+        """Get completed steps as list"""
+        try:
+            return json.loads(self.steps_completed)
+        except:
+            return []
+    
+    def add_completed_step(self, step_name, step_result=None):
+        """Add a completed step"""
+        steps = self.get_steps_completed()
+        step_data = {
+            'name': step_name,
+            'completed_at': datetime.datetime.now().isoformat(),
+            'result': step_result
+        }
+        steps.append(step_data)
+        self.steps_completed = json.dumps(steps)
+        self.save()
+    
+    def get_steps_failed(self):
+        """Get failed steps as list"""
+        try:
+            return json.loads(self.steps_failed)
+        except:
+            return []
+    
+    def add_failed_step(self, step_name, error_message):
+        """Add a failed step"""
+        steps = self.get_steps_failed()
+        step_data = {
+            'name': step_name,
+            'failed_at': datetime.datetime.now().isoformat(),
+            'error': error_message
+        }
+        steps.append(step_data)
+        self.steps_failed = json.dumps(steps)
+        self.save()
+    
+    def get_result_summary(self):
+        """Get result summary as dict"""
+        try:
+            return json.loads(self.result_summary) if self.result_summary else {}
+        except:
+            return {}
+    
+    def set_result_summary(self, summary_dict):
+        """Set result summary"""
+        self.result_summary = json.dumps(summary_dict)
+        self.save()
+    
+    class Meta:
+        indexes = (
+            (('status',), False),
+            (('created_at',), False),
+        )
+
 class PageEmbedding(BaseModel):
     """Model for storing page-level vector embeddings"""
     paper = ForeignKeyField(Paper, backref='page_embeddings', on_delete='CASCADE')

@@ -28,7 +28,7 @@
                     </div>
                 {% endif %}
 
-                <form id="uploadForm" action="/process" method="post" enctype="multipart/form-data">
+                <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
                     <div class="mb-4">
                         <label for="file" class="form-label">Select PDF File</label>
                         <input type="file" class="form-control" id="file" name="file" accept=".pdf" required>
@@ -129,13 +129,131 @@
 {% block scripts %}
 <script>
 document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Prevent default form submission
+    
     // Show processing modal
     const modal = new bootstrap.Modal(document.getElementById('processingModal'));
     modal.show();
     
-    // Simulate progress (since we can't get real-time progress from backend)
-    simulateProgress();
+    // Upload file using fetch API
+    uploadFile();
 });
+
+async function uploadFile() {
+    const formData = new FormData();
+    const fileInput = document.getElementById('file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a file');
+        return;
+    }
+    
+    formData.append('file', file);
+    
+    try {
+        // Upload file
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Upload result:', result);
+        
+        // Start polling for status
+        pollJobStatus(result.job_id);
+        
+    } catch (error) {
+        console.error('Upload error:', error);
+        updateProgress('Upload failed', 0, error.message);
+    }
+}
+
+async function pollJobStatus(jobId) {
+    const statusElement = document.getElementById('processingStatus');
+    const progressBar = document.getElementById('progressBar');
+    const stepsElement = document.getElementById('stepsList');
+    
+    try {
+        const response = await fetch(`/job/${jobId}`);
+        
+        if (!response.ok) {
+            throw new Error(`Status check failed: ${response.statusText}`);
+        }
+        
+        const status = await response.json();
+        console.log('Job status:', status);
+        
+        // Update UI
+        statusElement.textContent = status.current_step || status.status;
+        progressBar.style.width = status.progress_percentage + '%';
+        progressBar.textContent = status.progress_percentage + '%';
+        
+        // Update steps list
+        let stepsHtml = '';
+        status.steps_completed.forEach(step => {
+            stepsHtml += `• ${step.name} ✓<br>`;
+        });
+        if (status.current_step && status.status === 'processing') {
+            stepsHtml += `• ${status.current_step} (in progress...)<br>`;
+        }
+        stepsElement.innerHTML = stepsHtml;
+        
+        // Check if processing is complete
+        if (status.status === 'completed') {
+            progressBar.style.width = '100%';
+            progressBar.textContent = '100%';
+            statusElement.textContent = 'Processing completed!';
+            
+            // Redirect to paper detail page after a delay
+            setTimeout(() => {
+                if (status.paper_id) {
+                    window.location.href = `/admin/papers/${status.paper_id}`;
+                } else {
+                    window.location.href = '/admin/papers';
+                }
+            }, 2000);
+            
+        } else if (status.status === 'failed') {
+            progressBar.className = 'progress-bar bg-danger';
+            statusElement.textContent = 'Processing failed';
+            stepsElement.innerHTML += `<span class="text-danger">Error: ${status.error_message}</span>`;
+            
+        } else if (status.status === 'processing') {
+            // Continue polling
+            setTimeout(() => pollJobStatus(jobId), 2000);
+        }
+        
+    } catch (error) {
+        console.error('Status polling error:', error);
+        statusElement.textContent = 'Status check failed';
+        // Retry after longer delay
+        setTimeout(() => pollJobStatus(jobId), 5000);
+    }
+}
+
+function updateProgress(status, percentage, description) {
+    const statusElement = document.getElementById('processingStatus');
+    const progressBar = document.getElementById('progressBar');
+    const descriptionElement = document.getElementById('processingDescription');
+    
+    statusElement.textContent = status;
+    progressBar.style.width = percentage + '%';
+    progressBar.textContent = percentage + '%';
+    
+    if (description) {
+        descriptionElement.textContent = description;
+    }
+    
+    if (percentage === 0) {
+        progressBar.className = 'progress-bar bg-danger';
+    }
+}
 
 function simulateProgress() {
     const progressBar = document.getElementById('progressBar');

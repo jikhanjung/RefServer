@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 # Import processing modules
 from pipeline import process_uploaded_pdf, check_all_services
+from background_processor import get_background_processor
+from models import ProcessingJob
 from db import (
     get_paper_by_id, get_metadata_by_id, 
     get_embedding_by_id, get_layout_by_id,
@@ -85,6 +87,27 @@ class EmbeddingInfo(BaseModel):
     dimension: int
     vector: List[float]
 
+class UploadResponse(BaseModel):
+    job_id: str
+    filename: str
+    message: str
+    status: str
+
+class JobStatus(BaseModel):
+    job_id: str
+    filename: str
+    status: str
+    current_step: Optional[str]
+    progress_percentage: int
+    steps_completed: List[Dict]
+    steps_failed: List[Dict]
+    error_message: Optional[str]
+    result_summary: Optional[Dict]
+    created_at: Optional[str]
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    paper_id: Optional[str]
+
 class PageEmbeddingInfo(BaseModel):
     page_number: int
     page_text: str
@@ -137,13 +160,14 @@ async def get_service_status():
         raise HTTPException(status_code=500, detail=f"Failed to get service status: {str(e)}")
 
 # PDF processing endpoint
-@app.post("/process", response_model=ProcessingResult)
-async def process_pdf(
+@app.post("/upload", response_model=UploadResponse)
+async def upload_pdf(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="PDF file to process")
+    file: UploadFile = File(..., description="PDF file to upload and process")
 ):
     """
-    Process uploaded PDF through complete intelligence pipeline
+    Upload PDF file and start background processing
+    Returns job_id for status tracking
     """
     # Validate file
     if not file.filename.lower().endswith('.pdf'):
@@ -155,7 +179,7 @@ async def process_pdf(
     temp_file_path = None
     
     try:
-        logger.info(f"Processing PDF upload: {file.filename}")
+        logger.info(f"Uploading PDF: {file.filename}")
         
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
@@ -165,7 +189,92 @@ async def process_pdf(
         
         logger.info(f"Uploaded file saved to: {temp_file_path}")
         
-        # Process PDF through pipeline
+        # Create processing job
+        processor = get_background_processor()
+        job_id = processor.create_upload_job(file.filename, temp_file_path)
+        
+        # Start background processing
+        processor.start_processing(job_id, temp_file_path, background_tasks)
+        
+        return UploadResponse(
+            job_id=job_id,
+            filename=file.filename,
+            message="File uploaded successfully. Processing started in background.",
+            status="processing"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error uploading PDF: {e}")
+        
+        # Cleanup temp file on error
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+def cleanup_temp_file(file_path: str):
+    """Clean up temporary file"""
+    try:
+        if os.path.exists(file_path):
+            os.unlink(file_path)
+            logger.info(f"Cleaned up temp file: {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to cleanup temp file {file_path}: {e}")
+
+
+@app.get("/job/{job_id}", response_model=JobStatus)
+async def get_job_status(job_id: str):
+    """Get processing job status"""
+    try:
+        processor = get_background_processor()
+        status = processor.get_job_status(job_id)
+        
+        if not status:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        return JobStatus(**status)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting job status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+
+@app.post("/process", response_model=ProcessingResult, deprecated=True)
+async def process_pdf_legacy(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="PDF file to process")
+):
+    """
+    Legacy endpoint for backward compatibility
+    Processes PDF synchronously (deprecated - use /upload instead)
+    """
+    # Validate file
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    
+    if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
+    
+    temp_file_path = None
+    
+    try:
+        logger.info(f"Processing PDF upload (legacy): {file.filename}")
+        
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file_path = temp_file.name
+            content = await file.read()
+            temp_file.write(content)
+        
+        logger.info(f"Uploaded file saved to: {temp_file_path}")
+        
+        # Process PDF through pipeline (synchronous)
         result = process_uploaded_pdf(temp_file_path, file.filename)
         
         # Schedule cleanup of temporary file

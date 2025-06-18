@@ -47,13 +47,14 @@ class PDFProcessingPipeline:
         
         logger.info(f"Initialized PDF processing pipeline with data directory: {self.data_dir}")
     
-    def process_pdf(self, pdf_file_path: str, filename: str = None) -> Dict:
+    def process_pdf(self, pdf_file_path: str, filename: str = None, progress_callback=None) -> Dict:
         """
         Complete PDF processing pipeline
         
         Args:
             pdf_file_path: str, path to uploaded PDF file
             filename: str, original filename (optional)
+            progress_callback: callable, function to call with progress updates (step_name, percentage)
             
         Returns:
             Dict: processing results summary
@@ -93,6 +94,8 @@ class PDFProcessingPipeline:
             
             # Step 1: Save initial paper record
             logger.info("Step 1: Saving initial paper record")
+            if progress_callback:
+                progress_callback("Saving initial paper record", 10)
             try:
                 paper = save_paper(doc_id, filename, str(pdf_final_path))
                 result['steps_completed'].append('save_paper')
@@ -104,6 +107,8 @@ class PDFProcessingPipeline:
             
             # Step 2: OCR Processing
             logger.info("Step 2: OCR Processing")
+            if progress_callback:
+                progress_callback("OCR and text extraction", 20)
             try:
                 ocr_result = process_pdf_with_ocr(
                     str(pdf_final_path), 
@@ -139,6 +144,8 @@ class PDFProcessingPipeline:
             
             # Step 3: OCR Quality Assessment
             logger.info("Step 3: OCR Quality Assessment")
+            if progress_callback:
+                progress_callback("OCR quality assessment", 35)
             ocr_quality = "unknown"
             quality_details = {}
             
@@ -169,6 +176,8 @@ class PDFProcessingPipeline:
             
             # Step 4: Page-level Embedding Generation
             logger.info("Step 4: Page-level Embedding Generation")
+            if progress_callback:
+                progress_callback("Generating page embeddings", 50)
             try:
                 if extracted_text and len(extracted_text.strip()) > 50:
                     # Extract page texts separately
@@ -233,6 +242,8 @@ class PDFProcessingPipeline:
             
             # Step 5: Layout Analysis
             logger.info("Step 5: Layout Analysis")
+            if progress_callback:
+                progress_callback("Layout analysis", 65)
             try:
                 if is_layout_service_available():
                     layout_data, layout_success = analyze_pdf_layout(str(pdf_final_path))
@@ -261,6 +272,8 @@ class PDFProcessingPipeline:
             
             # Step 6: Metadata Extraction
             logger.info("Step 6: Metadata Extraction")
+            if progress_callback:
+                progress_callback("Metadata extraction", 80)
             try:
                 if extracted_text and len(extracted_text.strip()) > 100:
                     if is_metadata_service_available():
@@ -302,6 +315,8 @@ class PDFProcessingPipeline:
             
             # Step 7: Cleanup and Finalization
             logger.info("Step 7: Cleanup and Finalization")
+            if progress_callback:
+                progress_callback("Finalizing", 95)
             try:
                 # Clean up temporary files
                 if temp_dir and temp_dir.exists():
@@ -317,6 +332,8 @@ class PDFProcessingPipeline:
                 
                 if not critical_failures:
                     result['success'] = True
+                    if progress_callback:
+                        progress_callback("Completed", 100)
                     logger.info(f"PDF processing completed successfully in {processing_time:.2f}s")
                 else:
                     logger.error(f"PDF processing failed due to critical step failures: {critical_failures}")
@@ -504,3 +521,7 @@ def check_all_services() -> Dict:
             'error': str(e),
             'timestamp': time.time()
         }
+
+
+# Alias for backward compatibility
+PDFProcessor = PDFProcessingPipeline

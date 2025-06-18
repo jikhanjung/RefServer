@@ -107,16 +107,132 @@ class RefServerAPITester:
             self.log(f"Service status test failed: {e}", "ERROR")
             self.results['failed'] += 1
     
-    def test_process_pdf(self, pdf_path: str = None):
-        """Test PDF processing endpoint"""
-        self.log("Testing PDF processing endpoint...")
+    def test_upload_pdf(self, pdf_path: str = None):
+        """Test PDF upload endpoint (new async API)"""
+        self.log("Testing PDF upload endpoint...")
         
         # Create a test PDF if none provided
         if not pdf_path:
             pdf_path = self.create_test_pdf()
         
         if not pdf_path or not os.path.exists(pdf_path):
-            self.log("❌ No test PDF file available for processing test", "ERROR")
+            self.log("❌ No test PDF file available for upload test", "ERROR")
+            self.results['failed'] += 1
+            return None
+        
+        try:
+            with open(pdf_path, 'rb') as pdf_file:
+                files = {'file': ('test.pdf', pdf_file, 'application/pdf')}
+                
+                self.log(f"   Uploading PDF: {os.path.basename(pdf_path)}")
+                start_time = time.time()
+                
+                response = self.session.post(
+                    f"{self.base_url}/upload",
+                    files=files,
+                    timeout=30  # 30 second timeout for upload
+                )
+                
+                upload_time = time.time() - start_time
+                success = self.assert_response(response, 200, "PDF Upload")
+                
+                if success:
+                    data = response.json()
+                    job_id = data.get('job_id')
+                    
+                    self.log(f"   Job ID: {job_id}")
+                    self.log(f"   Status: {data.get('status')}")
+                    self.log(f"   Upload time: {upload_time:.2f}s")
+                    self.log(f"   Message: {data.get('message')}")
+                    
+                    return job_id
+                else:
+                    return None
+                    
+        except Exception as e:
+            self.log(f"Upload test failed: {e}", "ERROR")
+            self.results['failed'] += 1
+            return None
+    
+    def test_job_status_polling(self, job_id: str, max_wait_time: int = 300):
+        """Test job status polling until completion"""
+        self.log(f"Testing job status polling for job: {job_id}")
+        
+        start_time = time.time()
+        last_progress = -1
+        
+        try:
+            while time.time() - start_time < max_wait_time:
+                response = self.session.get(f"{self.base_url}/job/{job_id}")
+                success = self.assert_response(response, 200, "Job Status")
+                
+                if not success:
+                    return None
+                
+                data = response.json()
+                status = data.get('status')
+                progress = data.get('progress_percentage', 0)
+                current_step = data.get('current_step', 'Unknown')
+                
+                # Log progress updates
+                if progress != last_progress:
+                    self.log(f"   Progress: {progress}% - {current_step}")
+                    last_progress = progress
+                
+                if status == 'completed':
+                    self.test_doc_id = data.get('paper_id')
+                    elapsed_time = time.time() - start_time
+                    
+                    self.log(f"   ✅ Processing completed in {elapsed_time:.2f}s")
+                    self.log(f"   Document ID: {self.test_doc_id}")
+                    self.log(f"   Steps completed: {len(data.get('steps_completed', []))}")
+                    self.log(f"   Steps failed: {len(data.get('steps_failed', []))}")
+                    
+                    # Show result summary
+                    result_summary = data.get('result_summary', {})
+                    if result_summary:
+                        self.log(f"   Final success: {result_summary.get('success')}")
+                        if result_summary.get('warnings'):
+                            self.log(f"   Warnings: {len(result_summary.get('warnings', []))}")
+                    
+                    return self.test_doc_id
+                    
+                elif status == 'failed':
+                    error_msg = data.get('error_message', 'Unknown error')
+                    self.log(f"   ❌ Processing failed: {error_msg}", "ERROR")
+                    self.results['failed'] += 1
+                    return None
+                
+                elif status == 'processing':
+                    # Continue polling
+                    time.sleep(2)
+                    continue
+                
+                else:
+                    self.log(f"   Unknown status: {status}", "WARNING")
+                    time.sleep(2)
+                    continue
+            
+            # Timeout reached
+            self.log(f"   ⏰ Processing timeout after {max_wait_time}s", "ERROR")
+            self.results['failed'] += 1
+            return None
+            
+        except Exception as e:
+            self.log(f"Job status polling failed: {e}", "ERROR")
+            self.results['failed'] += 1
+            return None
+    
+    def test_process_pdf_legacy(self, pdf_path: str = None):
+        """Test legacy PDF processing endpoint (for backward compatibility)"""
+        self.log("Testing legacy PDF processing endpoint...")
+        
+        # Create a test PDF if none provided
+        if not pdf_path:
+            pdf_path = self.create_test_pdf()
+        
+        if not pdf_path or not os.path.exists(pdf_path):
+            self.log("❌ No test PDF file available for legacy processing test", "ERROR")
             self.results['failed'] += 1
             return
         
@@ -134,13 +250,13 @@ class RefServerAPITester:
                 )
                 
                 processing_time = time.time() - start_time
-                success = self.assert_response(response, 200, "PDF Processing")
+                success = self.assert_response(response, 200, "Legacy PDF Processing")
                 
                 if success:
                     data = response.json()
-                    self.test_doc_id = data.get('doc_id')
+                    doc_id = data.get('doc_id')
                     
-                    self.log(f"   Document ID: {self.test_doc_id}")
+                    self.log(f"   Document ID: {doc_id}")
                     self.log(f"   Success: {data.get('success')}")
                     self.log(f"   Processing time: {data.get('processing_time', 0):.2f}s")
                     self.log(f"   Steps completed: {len(data.get('steps_completed', []))}")
@@ -151,8 +267,9 @@ class RefServerAPITester:
                         for warning in data.get('warnings', [])[:3]:  # Show first 3 warnings
                             self.log(f"     - {warning}")
                     
-                    # Store doc_id for subsequent tests
-                    if self.test_doc_id:
+                    # Store doc_id for subsequent tests if not already set
+                    if not self.test_doc_id and doc_id:
+                        self.test_doc_id = doc_id
                         self.log(f"   Using doc_id {self.test_doc_id} for subsequent tests")
         
         except requests.Timeout:
@@ -387,10 +504,20 @@ class RefServerAPITester:
         self.test_health_check()
         self.test_service_status()
         
-        # Test PDF processing (this may take a while)
-        self.test_process_pdf(pdf_path)
+        # Test new async PDF processing workflow
+        self.log("\n📤 Testing Async PDF Processing Workflow")
+        job_id = self.test_upload_pdf(pdf_path)
+        if job_id:
+            doc_id = self.test_job_status_polling(job_id)
+            if doc_id:
+                self.test_doc_id = doc_id
         
-        # Test data retrieval endpoints
+        # Test legacy synchronous processing for backward compatibility
+        self.log("\n🔄 Testing Legacy Synchronous Processing")
+        self.test_process_pdf_legacy(pdf_path)
+        
+        # Test data retrieval endpoints (use doc_id from async processing if available)
+        self.log("\n📊 Testing Data Retrieval Endpoints")
         self.test_get_paper_info()
         self.test_get_metadata()
         self.test_get_embedding()
@@ -399,10 +526,12 @@ class RefServerAPITester:
         self.test_get_text()
         
         # Test utility endpoints
+        self.log("\n🔍 Testing Utility Endpoints")
         self.test_search()
         self.test_statistics()
         
         # Test error handling
+        self.log("\n⚠️ Testing Error Handling")
         self.test_invalid_endpoints()
         
         # Print summary
