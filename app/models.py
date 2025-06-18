@@ -33,8 +33,23 @@ class Paper(BaseModel):
             (('content_id',), False),
         )
 
+class PageEmbedding(BaseModel):
+    """Model for storing page-level vector embeddings"""
+    paper = ForeignKeyField(Paper, backref='page_embeddings', on_delete='CASCADE')
+    page_number = IntegerField()  # Page number (1-based)
+    page_text = TextField(null=True)  # Extracted text from this page
+    vector_blob = BlobField()  # Serialized numpy array
+    vector_dim = IntegerField()  # Vector dimension
+    model_name = CharField(default='bge-m3')  # Embedding model used
+    created_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('paper', 'page_number'), True),  # Unique constraint on paper + page_number
+        )
+
 class Embedding(BaseModel):
-    """Model for storing vector embeddings"""
+    """Model for storing document-level vector embeddings (averaged from pages)"""
     paper = ForeignKeyField(Paper, backref='embeddings', on_delete='CASCADE')
     vector_blob = BlobField()  # Serialized numpy array
     vector_dim = IntegerField()  # Vector dimension

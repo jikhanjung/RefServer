@@ -343,3 +343,163 @@ def get_layout_by_id(doc_id):
         return layout.get_layout_data()
     except (Paper.DoesNotExist, LayoutAnalysis.DoesNotExist):
         return None
+
+def save_page_embedding(doc_id, page_number, page_text, embedding_vector, model_name='bge-m3'):
+    """
+    Save page-level embedding to database
+    
+    Args:
+        doc_id: str, document ID
+        page_number: int, page number (1-based)
+        page_text: str, extracted text from the page
+        embedding_vector: numpy array, embedding vector
+        model_name: str, name of the embedding model used
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Get paper instance
+        paper = Paper.get(Paper.doc_id == doc_id)
+        
+        # Delete existing page embedding if exists
+        PageEmbedding.delete().where(
+            (PageEmbedding.paper == paper) & 
+            (PageEmbedding.page_number == page_number)
+        ).execute()
+        
+        # Serialize vector
+        vector_blob = serialize_vector(embedding_vector)
+        vector_dim = len(embedding_vector)
+        
+        # Create new page embedding
+        PageEmbedding.create(
+            paper=paper,
+            page_number=page_number,
+            page_text=page_text,
+            vector_blob=vector_blob,
+            vector_dim=vector_dim,
+            model_name=model_name
+        )
+        
+        logger.info(f"Saved page {page_number} embedding for document {doc_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving page embedding: {e}")
+        return False
+
+def save_page_embeddings_batch(doc_id, page_embeddings_data, model_name='bge-m3'):
+    """
+    Save multiple page embeddings in batch
+    
+    Args:
+        doc_id: str, document ID
+        page_embeddings_data: list of tuples (page_number, page_text, embedding_vector)
+        model_name: str, name of the embedding model used
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Get paper instance
+        paper = Paper.get(Paper.doc_id == doc_id)
+        
+        # Delete all existing page embeddings for this document
+        PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+        
+        # Prepare batch data
+        batch_data = []
+        for page_number, page_text, embedding_vector in page_embeddings_data:
+            vector_blob = serialize_vector(embedding_vector)
+            vector_dim = len(embedding_vector)
+            
+            batch_data.append({
+                'paper': paper,
+                'page_number': page_number,
+                'page_text': page_text,
+                'vector_blob': vector_blob,
+                'vector_dim': vector_dim,
+                'model_name': model_name
+            })
+        
+        # Batch insert
+        PageEmbedding.insert_many(batch_data).execute()
+        
+        logger.info(f"Saved {len(batch_data)} page embeddings for document {doc_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving page embeddings batch: {e}")
+        return False
+
+def get_page_embeddings_by_id(doc_id):
+    """
+    Get all page embeddings for a document
+    
+    Args:
+        doc_id: str, document ID
+    
+    Returns:
+        list: List of tuples (page_number, page_text, embedding_vector) or None if not found
+    """
+    try:
+        paper = Paper.get(Paper.doc_id == doc_id)
+        page_embeddings = PageEmbedding.select().where(
+            PageEmbedding.paper == paper
+        ).order_by(PageEmbedding.page_number)
+        
+        result = []
+        for page_emb in page_embeddings:
+            embedding_vector = deserialize_vector(page_emb.vector_blob, page_emb.vector_dim)
+            result.append((page_emb.page_number, page_emb.page_text, embedding_vector))
+        
+        return result
+        
+    except Paper.DoesNotExist:
+        return None
+
+def get_page_embedding_by_page(doc_id, page_number):
+    """
+    Get embedding for a specific page
+    
+    Args:
+        doc_id: str, document ID
+        page_number: int, page number (1-based)
+    
+    Returns:
+        tuple: (page_text, embedding_vector) or None if not found
+    """
+    try:
+        paper = Paper.get(Paper.doc_id == doc_id)
+        page_emb = PageEmbedding.get(
+            (PageEmbedding.paper == paper) & 
+            (PageEmbedding.page_number == page_number)
+        )
+        
+        embedding_vector = deserialize_vector(page_emb.vector_blob, page_emb.vector_dim)
+        return page_emb.page_text, embedding_vector
+        
+    except (Paper.DoesNotExist, PageEmbedding.DoesNotExist):
+        return None
+
+def delete_page_embeddings(doc_id):
+    """
+    Delete all page embeddings for a document
+    
+    Args:
+        doc_id: str, document ID
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        paper = Paper.get(Paper.doc_id == doc_id)
+        deleted_count = PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+        
+        logger.info(f"Deleted {deleted_count} page embeddings for document {doc_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error deleting page embeddings: {e}")
+        return False

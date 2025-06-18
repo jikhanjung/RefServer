@@ -17,11 +17,14 @@ def get_timestamp():
 
 def main():
     """Create new migration based on model changes"""
-    # Ensure data directory exists
-    data_dir = os.path.join(os.path.dirname(__file__), 'data')
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        print(f"Created data directory: {data_dir}")
+    # Override database path for local development
+    local_data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    if not os.path.exists(local_data_dir):
+        os.makedirs(local_data_dir)
+        print(f"Created data directory: {local_data_dir}")
+    
+    # Use local database path instead of /data
+    local_db_path = os.path.join(local_data_dir, 'refserver.db')
     
     # Ensure migrations directory exists
     migrations_path = os.path.join(os.path.dirname(__file__), 'migrations')
@@ -29,8 +32,12 @@ def main():
         os.makedirs(migrations_path)
         print(f"Created migrations directory: {migrations_path}")
     
-    print(f"Database path: {DATABASE_PATH}")
+    print(f"Database path: {local_db_path}")
     print(f"Migrations path: {migrations_path}")
+    
+    # Override database path temporarily
+    from app.models import db
+    db.init(local_db_path)
     
     # Connect to database
     db.connect()
@@ -52,7 +59,7 @@ def main():
     print(f"Migration name: {migration_name}")
     
     # Create migration for all models
-    models_to_migrate = [Paper, Embedding, Metadata, LayoutAnalysis]
+    models_to_migrate = [Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis]
     
     try:
         ret = router.create(auto=models_to_migrate, name=migration_name)

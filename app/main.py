@@ -14,7 +14,8 @@ from pydantic import BaseModel
 from pipeline import process_uploaded_pdf, check_all_services
 from db import (
     get_paper_by_id, get_metadata_by_id, 
-    get_embedding_by_id, get_layout_by_id
+    get_embedding_by_id, get_layout_by_id,
+    get_page_embeddings_by_id, get_page_embedding_by_page
 )
 
 # Configure logging
@@ -81,6 +82,17 @@ class MetadataInfo(BaseModel):
 class EmbeddingInfo(BaseModel):
     dimension: int
     vector: List[float]
+
+class PageEmbeddingInfo(BaseModel):
+    page_number: int
+    page_text: str
+    dimension: int
+    vector: List[float]
+
+class AllPageEmbeddingsInfo(BaseModel):
+    document_id: str
+    total_pages: int
+    pages: List[PageEmbeddingInfo]
 
 class LayoutInfo(BaseModel):
     page_count: int
@@ -243,6 +255,61 @@ async def get_paper_embedding(doc_id: str):
     except Exception as e:
         logger.error(f"Error getting embedding: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get embedding: {str(e)}")
+
+# Page embeddings endpoints
+@app.get("/embedding/{doc_id}/pages", response_model=AllPageEmbeddingsInfo)
+async def get_all_page_embeddings(doc_id: str):
+    """Get all page embeddings for a document"""
+    try:
+        page_embeddings = get_page_embeddings_by_id(doc_id)
+        
+        if page_embeddings is None:
+            raise HTTPException(status_code=404, detail="Page embeddings not found")
+        
+        pages = []
+        for page_number, page_text, embedding_vector in page_embeddings:
+            pages.append(PageEmbeddingInfo(
+                page_number=page_number,
+                page_text=page_text,
+                dimension=len(embedding_vector),
+                vector=embedding_vector.tolist()
+            ))
+        
+        return AllPageEmbeddingsInfo(
+            document_id=doc_id,
+            total_pages=len(pages),
+            pages=pages
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting page embeddings: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get page embeddings: {str(e)}")
+
+@app.get("/embedding/{doc_id}/page/{page_number}", response_model=PageEmbeddingInfo)
+async def get_single_page_embedding(doc_id: str, page_number: int):
+    """Get embedding for a specific page"""
+    try:
+        page_data = get_page_embedding_by_page(doc_id, page_number)
+        
+        if page_data is None:
+            raise HTTPException(status_code=404, detail=f"Page {page_number} embedding not found")
+        
+        page_text, embedding_vector = page_data
+        
+        return PageEmbeddingInfo(
+            page_number=page_number,
+            page_text=page_text,
+            dimension=len(embedding_vector),
+            vector=embedding_vector.tolist()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting page embedding: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get page embedding: {str(e)}")
 
 # Layout analysis endpoint
 @app.get("/layout/{doc_id}", response_model=LayoutInfo)

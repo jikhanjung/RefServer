@@ -51,8 +51,37 @@ def extract_text_from_pdf(pdf_path):
         return text_content.strip(), page_count
         
     except Exception as e:
-        logger.error(f"Error extracting text from PDF {pdf_path}: {e}")
-        raise
+        logger.error(f"Error extracting text from PDF: {e}")
+        return "", 0
+
+def extract_page_texts_from_pdf(pdf_path):
+    """
+    Extract text from PDF page by page using PyMuPDF
+    
+    Args:
+        pdf_path: str, path to PDF file
+    
+    Returns:
+        tuple: (page_texts, page_count) where page_texts is list of strings
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        page_texts = []
+        page_count = len(doc)
+        
+        for page_num in range(page_count):
+            page = doc[page_num]
+            text = page.get_text()
+            page_texts.append(text.strip())
+        
+        doc.close()
+        
+        logger.info(f"Extracted page texts from {page_count} pages")
+        return page_texts, page_count
+        
+    except Exception as e:
+        logger.error(f"Error extracting page texts from PDF: {e}")
+        return [], 0
 
 def detect_language(text, min_confidence=0.7):
     """

@@ -8,14 +8,15 @@ from pathlib import Path
 import time
 
 # Import all processing modules
-from ocr import process_pdf_with_ocr
+from ocr import process_pdf_with_ocr, extract_page_texts_from_pdf
 from ocr_quality import assess_document_quality, is_quality_assessment_available
-from embedding import generate_text_embedding
+from embedding import generate_page_embeddings, compute_document_embedding_from_pages
 from layout import analyze_pdf_layout, is_layout_service_available
 from metadata import extract_paper_metadata, is_metadata_service_available
 from db import (
     initialize_database, save_paper, save_embedding, save_metadata, 
-    save_layout_analysis, update_ocr_quality, get_paper_by_content_id
+    save_layout_analysis, update_ocr_quality, get_paper_by_content_id,
+    save_page_embeddings_batch
 )
 from models import compute_content_id
 
@@ -166,36 +167,62 @@ class PDFProcessingPipeline:
                 logger.error(f"Failed to update paper with OCR data: {e}")
                 result['warnings'].append(f"Failed to update OCR data: {str(e)}")
             
-            # Step 4: Text Embedding Generation
-            logger.info("Step 4: Text Embedding Generation")
+            # Step 4: Page-level Embedding Generation
+            logger.info("Step 4: Page-level Embedding Generation")
             try:
                 if extracted_text and len(extracted_text.strip()) > 50:
-                    embedding = generate_text_embedding(extracted_text)
+                    # Extract page texts separately
+                    page_texts, page_count = extract_page_texts_from_pdf(str(pdf_final_path))
                     
-                    if embedding is not None and len(embedding) > 0:
-                        # Compute content ID for deduplication
-                        content_id = compute_content_id(embedding)
+                    if page_texts and page_count > 0:
+                        # Generate embeddings for each page
+                        page_embeddings = generate_page_embeddings(page_texts)
                         
-                        # Check for duplicates
-                        existing_paper = get_paper_by_content_id(content_id)
-                        if existing_paper:
-                            logger.warning(f"Similar paper found: {existing_paper.doc_id}")
-                            result['warnings'].append(f"Similar content detected (ID: {existing_paper.doc_id})")
-                        
-                        # Save embedding
-                        save_embedding(doc_id, embedding)
-                        
-                        # Update paper with content_id
-                        paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
-                        
-                        result['data']['embedding'] = {
-                            'dimension': len(embedding),
-                            'content_id': content_id
-                        }
-                        result['steps_completed'].append('embedding')
-                        logger.info(f"Embedding generated: {len(embedding)} dimensions")
+                        if page_embeddings and len(page_embeddings) == page_count:
+                            # Prepare page embedding data for batch save
+                            page_embeddings_data = []
+                            for i, (page_text, page_embedding) in enumerate(zip(page_texts, page_embeddings)):
+                                page_embeddings_data.append((i + 1, page_text, page_embedding))  # 1-based page numbering
+                            
+                            # Save page embeddings in batch
+                            if save_page_embeddings_batch(doc_id, page_embeddings_data):
+                                logger.info(f"Saved {len(page_embeddings_data)} page embeddings")
+                                
+                                # Compute document-level embedding as average of page embeddings
+                                document_embedding = compute_document_embedding_from_pages(page_embeddings)
+                                
+                                if document_embedding is not None and len(document_embedding) > 0:
+                                    # Compute content ID for deduplication
+                                    content_id = compute_content_id(document_embedding)
+                                    
+                                    # Check for duplicates
+                                    existing_paper = get_paper_by_content_id(content_id)
+                                    if existing_paper:
+                                        logger.warning(f"Similar paper found: {existing_paper.doc_id}")
+                                        result['warnings'].append(f"Similar content detected (ID: {existing_paper.doc_id})")
+                                    
+                                    # Save document-level embedding
+                                    save_embedding(doc_id, document_embedding)
+                                    
+                                    # Update paper with content_id
+                                    paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
+                                    
+                                    result['data']['embedding'] = {
+                                        'dimension': len(document_embedding),
+                                        'content_id': content_id,
+                                        'page_count': page_count,
+                                        'pages_with_embeddings': len(page_embeddings_data)
+                                    }
+                                    result['steps_completed'].append('embedding')
+                                    logger.info(f"Document embedding generated from {page_count} pages: {len(document_embedding)} dimensions")
+                                else:
+                                    raise Exception("Failed to generate valid document embedding from pages")
+                            else:
+                                raise Exception("Failed to save page embeddings")
+                        else:
+                            raise Exception(f"Page embedding generation failed: expected {page_count}, got {len(page_embeddings) if page_embeddings else 0}")
                     else:
-                        raise Exception("Failed to generate valid embedding")
+                        raise Exception("No page texts extracted for embedding generation")
                 else:
                     raise Exception("Text too short for embedding generation")
                     

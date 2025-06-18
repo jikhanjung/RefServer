@@ -308,10 +308,24 @@ python test_api.py --pdf /path/to/paper.pdf
         - Dockerfile 간소화 (불필요한 COPY 제거)
         - Docker Compose 배포 시 호스트 /data 디렉토리에 정상 DB 생성 보장
 
-    **🎯 RefServer v1.0.1 배포 구조 완성!**
+    - **📄 페이지별 임베딩 시스템 구현**
+        - **DB 스키마 확장**: PageEmbedding 모델 추가 (페이지별 임베딩 저장)
+        - **텍스트 처리 개선**: extract_page_texts_from_pdf() - 페이지별 텍스트 추출
+        - **임베딩 로직 재설계**: 
+            - 기존: 텍스트 청킹 → 평균 임베딩
+            - 신규: 페이지별 임베딩 → 문서 평균 임베딩
+        - **배치 처리 최적화**: save_page_embeddings_batch() 페이지별 일괄 저장
+        - **API 엔드포인트 확장**: 
+            - GET /embedding/{doc_id}/pages - 모든 페이지 임베딩 조회
+            - GET /embedding/{doc_id}/page/{page_num} - 특정 페이지 임베딩 조회
+        - **파이프라인 통합**: Step 4를 "Page-level Embedding Generation"으로 변경
+        - **마이그레이션 지원**: migrate.py에 PageEmbedding 모델 추가
+
+    **🎯 RefServer v1.1.0 페이지별 임베딩 완성!**
     - 완전한 프로덕션 준비 완료
     - Docker Hub 배포 가능
     - 종합 테스트 통과 (Layout Analysis 포함)
     - 실제 학술 논문 처리 검증 완료
     - 모든 7단계 파이프라인 정상 작동
     - Docker Compose 볼륨 마운트 최적화 완료
+    - **페이지별 임베딩 시스템으로 정밀도 향상**

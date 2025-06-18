@@ -294,6 +294,79 @@ def generate_text_embedding(text: str, use_chunking: bool = True) -> np.ndarray:
         logger.error(f"Error generating text embedding: {e}")
         return np.zeros(1024, dtype=np.float32)
 
+def generate_page_embeddings(page_texts: List[str]) -> List[np.ndarray]:
+    """
+    Generate embeddings for multiple pages
+    
+    Args:
+        page_texts: List[str], list of page texts
+        
+    Returns:
+        List[np.ndarray]: list of embedding vectors (1024 dimensions each)
+    """
+    if not page_texts:
+        logger.warning("Empty page texts provided for embedding generation")
+        return []
+    
+    try:
+        model = get_embedding_model()
+        embeddings = []
+        
+        # Process each page text
+        for i, page_text in enumerate(page_texts):
+            if not page_text or not page_text.strip():
+                logger.warning(f"Empty text for page {i+1}, using zero vector")
+                embeddings.append(np.zeros(1024, dtype=np.float32))
+                continue
+            
+            # Use single encoding for page-level text (no chunking needed)
+            embedding = model.encode_text(page_text)
+            embeddings.append(embedding)
+        
+        logger.info(f"Generated embeddings for {len(embeddings)} pages")
+        return embeddings
+        
+    except Exception as e:
+        logger.error(f"Error generating page embeddings: {e}")
+        return [np.zeros(1024, dtype=np.float32) for _ in page_texts]
+
+def compute_document_embedding_from_pages(page_embeddings: List[np.ndarray]) -> np.ndarray:
+    """
+    Compute document-level embedding by averaging page embeddings
+    
+    Args:
+        page_embeddings: List[np.ndarray], list of page embedding vectors
+        
+    Returns:
+        np.ndarray: averaged document embedding vector (1024 dimensions)
+    """
+    if not page_embeddings:
+        logger.warning("Empty page embeddings provided")
+        return np.zeros(1024, dtype=np.float32)
+    
+    try:
+        # Filter out zero vectors
+        valid_embeddings = [emb for emb in page_embeddings if np.any(emb)]
+        
+        if not valid_embeddings:
+            logger.warning("No valid page embeddings found")
+            return np.zeros(1024, dtype=np.float32)
+        
+        # Compute average
+        averaged_embedding = np.mean(valid_embeddings, axis=0)
+        
+        # Normalize
+        norm = np.linalg.norm(averaged_embedding)
+        if norm > 0:
+            averaged_embedding = averaged_embedding / norm
+        
+        logger.info(f"Computed document embedding from {len(valid_embeddings)} page embeddings")
+        return averaged_embedding.astype(np.float32)
+        
+    except Exception as e:
+        logger.error(f"Error computing document embedding from pages: {e}")
+        return np.zeros(1024, dtype=np.float32)
+
 def compute_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
     """
     Compute cosine similarity between two embeddings
