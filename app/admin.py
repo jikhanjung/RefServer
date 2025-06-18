@@ -99,9 +99,15 @@ def get_stats() -> Dict[str, Any]:
     """Get dashboard statistics"""
     try:
         total_papers = Paper.select().count()
-        papers_with_metadata = Paper.select().join(Metadata, join_type='INNER').count()
-        papers_with_embeddings = Paper.select().join(Embedding, join_type='INNER').count()
-        papers_with_layout = Paper.select().join(LayoutAnalysis, join_type='INNER').count()
+        papers_with_metadata = Paper.select().where(
+            Paper.id.in_(Metadata.select(Metadata.paper))
+        ).count()
+        papers_with_embeddings = Paper.select().where(
+            Paper.id.in_(Embedding.select(Embedding.paper))
+        ).count()
+        papers_with_layout = Paper.select().where(
+            Paper.id.in_(LayoutAnalysis.select(LayoutAnalysis.paper))
+        ).count()
         
         # Calculate processing rates
         metadata_rate = (papers_with_metadata / total_papers * 100) if total_papers > 0 else 0
