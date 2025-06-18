@@ -31,18 +31,14 @@ RUN python download_model.py
 # Copy application code
 COPY app/ .
 
-# Copy migrations and init script
+# Copy migrations
 COPY migrations/ /app/migrations/
-COPY init_db.py /app/
 
 # Create data directory
 RUN mkdir -p /data
 
-# Initialize database during build
-RUN python /app/init_db.py
-
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with database initialization
+CMD ["sh", "-c", "python init_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"]

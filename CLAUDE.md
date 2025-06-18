@@ -300,9 +300,18 @@ python test_api.py --pdf /path/to/paper.pdf
         - Connection refused 에러 완전 해결
         - Layout Analysis 정상 작동 확인
 
-    **🎯 RefServer v1.0.0 최종 완성!**
+- **2025-06-18**
+    - **🔧 Docker 배포 구조 최적화**
+        - DB 초기화 시점 변경: 빌드타임 → 런타임으로 이동
+        - init_db.py를 루트에서 app/ 디렉토리로 재구성
+        - 볼륨 마운트와 DB 초기화 순서 문제 해결
+        - Dockerfile 간소화 (불필요한 COPY 제거)
+        - Docker Compose 배포 시 호스트 /data 디렉토리에 정상 DB 생성 보장
+
+    **🎯 RefServer v1.0.1 배포 구조 완성!**
     - 완전한 프로덕션 준비 완료
     - Docker Hub 배포 가능
     - 종합 테스트 통과 (Layout Analysis 포함)
     - 실제 학술 논문 처리 검증 완료
     - 모든 7단계 파이프라인 정상 작동
+    - Docker Compose 볼륨 마운트 최적화 완료
