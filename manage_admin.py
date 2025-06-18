@@ -18,8 +18,27 @@ from models import db, AdminUser
 def init_db():
     """Initialize database connection"""
     try:
+        # Override database path for local development (same as migrate.py)
+        local_data_dir = Path(__file__).parent / 'data'
+        if not local_data_dir.exists():
+            local_data_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Created data directory: {local_data_dir}")
+        
+        # Use local database path instead of /data
+        local_db_path = local_data_dir / 'refserver.db'
+        
+        print(f"Database path: {local_db_path}")
+        
+        # Override database path temporarily
+        db.init(str(local_db_path))
+        
         if db.is_closed():
             db.connect()
+        
+        # Create tables if they don't exist
+        from models import Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser
+        db.create_tables([Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser], safe=True)
+        
         return True
     except Exception as e:
         print(f"Database connection error: {e}")
