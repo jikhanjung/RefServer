@@ -10,9 +10,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import os
 
-from .models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
-from .auth import AuthManager
-from .db import get_paper_by_id, get_all_papers, delete_paper, db
+from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
+from auth import AuthManager
+from db import get_paper_by_id, get_all_papers, delete_paper, db
 
 
 # Initialize router and templates
