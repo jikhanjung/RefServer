@@ -21,8 +21,8 @@ class HuridocsLayoutAnalyzer:
             service_url: str, Huridocs layout service URL (default from env)
         """
         self.service_url = service_url or os.getenv('HURIDOCS_LAYOUT_URL', 'http://huridocs-layout:5000')
-        self.analyze_url = f"{self.service_url}/analyze_layout"
-        self.status_url = f"{self.service_url}/status"
+        self.analyze_url = f"{self.service_url}/"  # Main endpoint is POST /
+        self.status_url = f"{self.service_url}/info"  # Status endpoint is /info
         
         logger.info(f"Initialized Huridocs layout analyzer with URL: {self.service_url}")
     
