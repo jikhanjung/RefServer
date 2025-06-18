@@ -17,7 +17,7 @@ from db import get_paper_by_id, db
 
 # Initialize router and templates
 router = APIRouter(prefix="/admin", tags=["admin"])
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="templates")
 security = HTTPBearer(auto_error=False)
 
 # JWT configuration

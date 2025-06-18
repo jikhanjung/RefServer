@@ -528,7 +528,7 @@ async def not_found_handler(request, exc):
     )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include admin router
 app.include_router(admin_router)
