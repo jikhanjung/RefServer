@@ -12,7 +12,7 @@ import os
 
 from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
 from auth import AuthManager
-from db import get_paper_by_id, get_all_papers, delete_paper, db
+from db import get_paper_by_id, db
 
 
 # Initialize router and templates
@@ -306,11 +306,20 @@ async def delete_paper_post(request: Request, doc_id: str):
     user = require_auth(request)
     
     try:
-        success = delete_paper(doc_id)
-        if success:
-            return RedirectResponse(url="/admin/papers?message=Paper deleted successfully", status_code=302)
-        else:
-            return RedirectResponse(url="/admin/papers?error=Failed to delete paper", status_code=302)
+        paper = get_paper_by_id(doc_id)
+        if not paper:
+            return RedirectResponse(url="/admin/papers?error=Paper not found", status_code=302)
+        
+        # Delete associated records
+        PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+        Embedding.delete().where(Embedding.paper == paper).execute()
+        Metadata.delete().where(Metadata.paper == paper).execute()
+        LayoutAnalysis.delete().where(LayoutAnalysis.paper == paper).execute()
+        
+        # Delete paper
+        paper.delete_instance()
+        
+        return RedirectResponse(url="/admin/papers?message=Paper deleted successfully", status_code=302)
             
     except Exception as e:
         return RedirectResponse(url=f"/admin/papers?error=Error deleting paper: {str(e)}", status_code=302)
