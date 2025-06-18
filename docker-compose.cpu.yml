@@ -19,7 +19,7 @@ services:
     build: .
     container_name: refserver-cpu
     ports:
-      - "8000:8000"
+      - "8060:8000"
     volumes:
       - ./data:/data
     environment:

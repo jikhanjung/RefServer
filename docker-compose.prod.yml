@@ -3,7 +3,7 @@ services:
     image: honestjung/refserver:latest  # Docker Hub에서 가져오기
     container_name: refserver
     ports:
-      - "8000:8000"
+      - "8060:8000"
     volumes:
       - ./data:/data
     environment:
@@ -20,7 +20,7 @@ services:
     image: honestjung/pdf-layout-custom:latest
     container_name: huridocs-layout
     ports:
-      - "5000:5060"  # Map external 5000 to internal 5060
+      - "8061:5060"  # Map external 8061 to internal 5060
     environment:
       - WORKERS=2
     restart: unless-stopped

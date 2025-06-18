@@ -3,7 +3,7 @@ services:
     build: .
     container_name: refserver
     ports:
-      - "8000:8000"
+      - "8060:8000"
     volumes:
       - ./data:/data
     environment:
@@ -20,6 +20,6 @@ services:
     image: honestjung/pdf-layout-custom:latest # model files included in the docker image
     container_name: huridocs-layout
     ports:
-      - "5000:5060"  # Map external 5000 to internal 5060
+      - "8061:5060"  # Map external 8061 to internal 5060
     environment:
       - WORKERS=2 

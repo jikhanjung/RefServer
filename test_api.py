@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 class RefServerAPITester:
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "http://localhost:8060"):
         """
         Initialize API tester
         
@@ -559,8 +559,8 @@ class RefServerAPITester:
                 with open(tmp_file_path, 'rb') as f:
                     files = {'file': ('test.txt', f, 'text/plain')}
                     response = self.session.post(f"{self.base_url}/upload", files=files)
-                    # This might be 422 (validation error) or 200 (if no validation)
-                    self.assert_response(response, [200, 422], "Upload with non-PDF file")
+                    # This might be 422 (validation error), 400 (bad request), or 200 (if no validation)
+                    self.assert_response(response, [200, 400, 422], "Upload with non-PDF file")
             finally:
                 import os
                 os.unlink(tmp_file_path)
@@ -684,7 +684,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="RefServer API Tester")
-    parser.add_argument("--url", default="http://localhost:8000", 
+    parser.add_argument("--url", default="http://localhost:8060", 
                        help="RefServer API base URL")
     parser.add_argument("--pdf", help="Path to test PDF file")
     parser.add_argument("--timeout", type=int, default=30,

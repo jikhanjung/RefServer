@@ -145,13 +145,13 @@ python test_api.py --pdf /path/to/paper.pdf
 ```
 
 ### 4. 관리자 인터페이스 접속
-- 관리자 페이지: http://localhost:8000/admin
+- 관리자 페이지: http://localhost:8060/admin
 - 기본 계정: admin / admin123 (첫 로그인 후 변경 권장)
 - **새로운 기능**: Jinja2 기반 경량화된 인터페이스 (FastAPI Admin 대체)
 
 ### 5. API 문서 확인
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8060/docs
+- ReDoc: http://localhost:8060/redoc
 
 ### 4. 테스트 결과 (v0.1.6)
 ```
@@ -202,15 +202,15 @@ python test_api.py --pdf /path/to/paper.pdf
 ### 사용 예제
 ```bash
 # 1. PDF 업로드 (즉시 완료)
-curl -X POST -F "file=@paper.pdf" http://localhost:8000/upload
+curl -X POST -F "file=@paper.pdf" http://localhost:8060/upload
 # 응답: {"job_id": "abc-123", "status": "uploaded", "message": "PDF uploaded successfully"}
 
 # 2. 진행률 확인 (실시간)
-curl http://localhost:8000/job/abc-123
+curl http://localhost:8060/job/abc-123
 # 응답: {"status": "processing", "progress_percentage": 67, "current_step": "layout_analysis"}
 
 # 3. 완료 확인
-curl http://localhost:8000/job/abc-123
+curl http://localhost:8060/job/abc-123
 # 응답: {"status": "completed", "progress_percentage": 100, "paper_id": "doc-456"}
 ```
 
@@ -365,7 +365,7 @@ python test_api.py
 python test_api.py --pdf /path/to/paper.pdf
 
 # 원격 서버 테스트
-python test_api.py --url http://server:8000
+python test_api.py --url http://server:8060
 ```
 
 ### 테스트 결과 예시
@@ -406,7 +406,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### 종합 테스트
 ```bash
 # 전체 API 테스트
-python test_api.py --url http://localhost:8000
+python test_api.py --url http://localhost:8060
 
 # 상세한 테스트 가이드
 # API_TESTING_GUIDE.md 참조

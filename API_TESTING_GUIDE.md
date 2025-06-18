@@ -74,7 +74,7 @@ chmod +x test_api.py
 docker-compose up -d
 
 # 서버 상태 확인 (수동)
-curl http://localhost:8000/health
+curl http://localhost:8060/health
 ```
 
 ---
@@ -83,7 +83,7 @@ curl http://localhost:8000/health
 
 ### 🚀 빠른 테스트
 ```bash
-# 기본 테스트 실행 (localhost:8000)
+# 기본 테스트 실행 (localhost:8060)
 python test_api.py
 ```
 
@@ -167,7 +167,7 @@ python test_api.py
 ### 🔧 커스텀 서버 URL
 ```bash
 # 다른 서버에서 실행 중인 RefServer 테스트
-python test_api.py --url http://192.168.1.100:8000
+python test_api.py --url http://192.168.1.100:8060
 
 # 포트가 다른 경우
 python test_api.py --url http://localhost:9000
@@ -195,7 +195,7 @@ python test_api.py --timeout 10
 ```bash
 # 원격 서버의 실제 PDF로 종합 테스트
 python test_api.py \
-  --url http://production-server:8000 \
+  --url http://production-server:8060 \
   --pdf /data/papers/nature_2024.pdf \
   --timeout 180
 ```
@@ -404,7 +404,7 @@ python test_api.py
 
 #### 1. 연결 오류
 ```
-❌ Cannot connect to http://localhost:8000
+❌ Cannot connect to http://localhost:8060
    Make sure RefServer is running with: docker-compose up
 ```
 **해결책**:
@@ -476,20 +476,20 @@ docker-compose logs --since="10m" refserver
 #### 개별 API 테스트
 ```bash
 # 헬스체크만 테스트
-curl http://localhost:8000/health
+curl http://localhost:8060/health
 
 # 서비스 상태만 확인
-curl http://localhost:8000/status
+curl http://localhost:8060/status
 
 # 수동 PDF 업로드 테스트
-curl -X POST "http://localhost:8000/process" \
+curl -X POST "http://localhost:8060/process" \
   -F "file=@test.pdf"
 ```
 
 #### 네트워크 문제 진단
 ```bash
 # 포트 사용 상태 확인
-netstat -tlnp | grep 8000
+netstat -tlnp | grep 8060
 
 # Docker 네트워크 확인
 docker network ls
