@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - RefServer Admin{% endblock %}
+{% block header %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-file-pdf fa-2x text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="card-title">{{ stats.total_papers }}</h5>
+                        <p class="card-text text-muted">Total Papers</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-tags fa-2x text-success"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="card-title">{{ stats.papers_with_metadata }}</h5>
+                        <p class="card-text text-muted">With Metadata</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-project-diagram fa-2x text-info"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="card-title">{{ stats.papers_with_embeddings }}</h5>
+                        <p class="card-text text-muted">With Embeddings</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-th-large fa-2x text-warning"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="card-title">{{ stats.papers_with_layout }}</h5>
+                        <p class="card-text text-muted">With Layout</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Processing Rates</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Metadata Extraction</label>
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: {{ stats.processing_rates.metadata_rate }}%">
+                            {{ "%.1f"|format(stats.processing_rates.metadata_rate) }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Embedding Generation</label>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ stats.processing_rates.embedding_rate }}%">
+                            {{ "%.1f"|format(stats.processing_rates.embedding_rate) }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Layout Analysis</label>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ stats.processing_rates.layout_rate }}%">
+                            {{ "%.1f"|format(stats.processing_rates.layout_rate) }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Service Status</h5>
+            </div>
+            <div class="card-body">
+                {% for service, status in stats.service_status.items() %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>{{ service|title }}</span>
+                    <span class="badge bg-{{ 'success' if status else 'danger' }}">
+                        {{ 'Online' if status else 'Offline' }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/admin/papers" class="btn btn-outline-primary">
+                        <i class="fas fa-file-pdf me-2"></i>View Papers
+                    </a>
+                    <a href="/docs" class="btn btn-outline-info" target="_blank">
+                        <i class="fas fa-book me-2"></i>API Docs
+                    </a>
+                    {% if user.is_superuser %}
+                    <a href="/admin/users" class="btn btn-outline-warning">
+                        <i class="fas fa-users-cog me-2"></i>Manage Users
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

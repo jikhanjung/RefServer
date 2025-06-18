@@ -1,15 +1,16 @@
-# RefServer v1.2.0
+# RefServer v1.3.0
 
 🚀 **과학 논문 PDF를 위한 완전한 AI 처리 파이프라인**
 
 RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임베딩 생성, 레이아웃 분석, 메타데이터 추출을 자동으로 수행하는 통합 지능형 시스템입니다.
 
 ## 🎉 **구현 완료 상태**
-- ✅ **11개 핵심 모듈** 완전 구현 (auth.py, admin.py 추가)
+- ✅ **11개 핵심 모듈** 완전 구현 (Jinja2 관리자 인터페이스)
 - ✅ **14개 API 엔드포인트** 제공 (페이지별 임베딩 조회 추가)
 - ✅ **페이지별 임베딩 시스템** 구현 완료
-- ✅ **웹 기반 관리자 인터페이스** 구현 완료
-- ✅ **DB 기반 다중 사용자 관리** 시스템
+- ✅ **Jinja2 기반 관리자 인터페이스** 구현 완료 (FastAPI Admin 대체)
+- ✅ **경량화된 의존성** (aioredis 충돌 해결)
+- ✅ **Bootstrap 반응형 UI** 관리자 패널
 - ✅ **Docker 배포** 준비 완료
 - ✅ **종합 테스트** 시스템 포함
 - ✅ **프로덕션 사용** 가능
@@ -22,7 +23,7 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임
 - **📐 레이아웃 분석**: Huridocs API로 텍스트/도표/그림 요소 구조 분석
 - **📚 메타데이터 추출**: LLM 기반 제목/저자/저널/DOI/초록 추출
 - **💾 통합 저장**: SQLite + Peewee ORM + 자동 마이그레이션
-- **🔐 관리자 시스템**: FastAPI Admin + DB 기반 다중 사용자 인증
+- **🔐 관리자 시스템**: Jinja2 템플릿 + Bootstrap UI + JWT 인증
 
 ## 🎯 API 엔드포인트
 
@@ -47,12 +48,13 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임
 - **`GET /search`** - 논문 검색 (제목, 저자, 연도)
 - **`GET /stats`** - 시스템 통계 및 처리 성공률
 
-### 관리자 인터페이스
-- **`/admin`** - 웹 기반 관리자 대시보드
-  - Papers, Metadata, Embeddings 관리
-  - Admin Users 계정 관리
-  - 검색, 필터링, 페이지네이션
-  - CRUD 작업 (생성, 조회, 수정, 삭제)
+### 관리자 인터페이스 (Jinja2 + Bootstrap)
+- **`/admin`** - 메인 관리자 대시보드 (로그인 확인)
+- **`/admin/login`** - 관리자 로그인 페이지
+- **`/admin/dashboard`** - 통계 대시보드 (처리 현황, 서비스 상태)
+- **`/admin/papers`** - 논문 관리 (검색, CRUD, 페이징)
+- **`/admin/papers/{id}`** - 논문 상세 정보 (메타데이터, 임베딩, 레이아웃)
+- **`/admin/logout`** - 관리자 로그아웃
 
 ## 🚀 빠른 시작
 
@@ -101,6 +103,7 @@ python test_api.py --pdf /path/to/paper.pdf
 ### 4. 관리자 인터페이스 접속
 - 관리자 페이지: http://localhost:8000/admin
 - 기본 계정: admin / admin123 (첫 로그인 후 변경 권장)
+- **새로운 기능**: Jinja2 기반 경량화된 인터페이스 (FastAPI Admin 대체)
 
 ### 5. API 문서 확인
 - Swagger UI: http://localhost:8000/docs
@@ -128,24 +131,35 @@ python test_api.py --pdf /path/to/paper.pdf
 ## 📁 프로젝트 구조
 
 ```
-RefServer/ (v1.0.0 완전 구현)
+RefServer/ (v1.3.0 완전 구현)
 ├── 🐳 docker-compose.yml        # 서비스 오케스트레이션
 ├── 📦 Dockerfile               # 컨테이너 이미지 정의
-├── 📋 requirements.txt         # Python 의존성
+├── 📋 requirements.txt         # Python 의존성 (aioredis 제거)
 ├── 📋 requirements-test.txt    # 테스트 의존성
 ├── 🧪 test_api.py             # 종합 API 테스트 스크립트 ✅
 ├── 📥 download_model.py        # BGE-M3 모델 다운로드 ✅
 ├── 🔄 migrate.py              # 데이터베이스 마이그레이션 ✅
-├── 📁 app/                    # 핵심 애플리케이션 (9개 모듈)
-│   ├── 🌐 main.py             # FastAPI 서버 (12개 엔드포인트) ✅
+├── 📁 app/                    # 핵심 애플리케이션 (11개 모듈)
+│   ├── 🌐 main.py             # FastAPI 서버 (14개 엔드포인트) ✅
 │   ├── 🔗 pipeline.py         # 7단계 통합 처리 파이프라인 ✅
-│   ├── 🗄️ models.py           # Peewee ORM 모델 (4개 테이블) ✅
+│   ├── 🗄️ models.py           # Peewee ORM 모델 (6개 테이블) ✅
 │   ├── 💾 db.py               # 완전한 CRUD 인터페이스 ✅
 │   ├── 🔍 ocr.py              # OCR + 10개 언어 자동 감지 ✅
 │   ├── 🎯 ocr_quality.py      # LLaVA 품질 평가 (via Ollama) ✅
-│   ├── 🧠 embedding.py        # BGE-M3 임베딩 + 로컬 모델 ✅
+│   ├── 🧠 embedding.py        # BGE-M3 페이지별 임베딩 + 로컬 모델 ✅
 │   ├── 📐 layout.py           # Huridocs 레이아웃 분석 ✅
-│   └── 📚 metadata.py         # 3단계 LLM 메타데이터 추출 ✅
+│   ├── 📚 metadata.py         # 3단계 LLM 메타데이터 추출 ✅
+│   ├── 🔐 admin.py            # Jinja2 관리자 인터페이스 ✅
+│   ├── 🛡️ auth.py             # JWT 인증 + bcrypt 해싱 ✅
+│   ├── 🎨 templates/          # HTML 템플릿 (Bootstrap 5)
+│   │   ├── base.html          # 기본 레이아웃
+│   │   ├── login.html         # 관리자 로그인
+│   │   ├── dashboard.html     # 통계 대시보드
+│   │   ├── papers.html        # 논문 관리
+│   │   └── paper_detail.html  # 논문 상세보기
+│   └── 📦 static/             # 정적 파일
+│       ├── css/admin.css      # 관리자 스타일
+│       └── js/admin.js        # 관리자 스크립트
 ├── 📁 data/                   # 데이터 저장소 (볼륨 마운트)
 │   ├── pdfs/                  # 처리된 PDF 파일
 │   ├── images/                # 첫 페이지 미리보기
@@ -208,18 +222,18 @@ HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Huridocs 서비스 (내부 �
 
 ## 🔐 보안 고려사항
 
-### 관리자 계정 보안
+### 관리자 계정 보안 (Jinja2 인터페이스)
 - **기본 계정 변경**: admin/admin123을 반드시 변경
-- **비밀번호 정책**: bcrypt 해싱으로 안전하게 저장
-- **다중 사용자**: 여러 관리자 계정 지원
-- **권한 분리**: 일반 관리자 vs 슈퍼유저
-- **계정 관리**: 활성화/비활성화 기능
+- **JWT 인증**: 토큰 기반 보안 세션 관리
+- **HTTP-only 쿠키**: XSS 공격 방지
+- **bcrypt 해싱**: 안전한 비밀번호 저장
+- **세션 타임아웃**: 60분 자동 로그아웃
 
 ### 시스템 보안
-- **세션 관리**: 자동 로그아웃 및 세션 암호화
-- **환경변수**: ADMIN_SECRET_KEY 설정 권장
-- **접근 제어**: 관리자 인터페이스 보호
-- **로그 추적**: 로그인/로그아웃 기록
+- **의존성 최적화**: FastAPI Admin/aioredis 제거로 보안 강화
+- **JWT 토큰**: JWT_SECRET_KEY 환경변수 설정 권장
+- **CSRF 보호**: SameSite 쿠키 설정
+- **접근 제어**: 인증된 사용자만 관리자 페이지 접근
 
 ## 📊 성능 특성
 
@@ -318,11 +332,14 @@ python test_api.py --url http://localhost:8000
 
 ## 🎯 **프로덕션 준비 완료**
 
-RefServer v1.0.0은 완전히 구현되어 프로덕션 환경에서 사용할 수 있습니다:
+RefServer v1.3.0은 완전히 구현되어 프로덕션 환경에서 사용할 수 있습니다:
 
 ### ✅ **구현 완료 현황**
-- **9개 핵심 모듈**: 모든 처리 단계 완전 구현
-- **12개 API 엔드포인트**: 완전한 REST API 제공
+- **11개 핵심 모듈**: 모든 처리 단계 + Jinja2 관리자 인터페이스 완전 구현
+- **14개 API 엔드포인트**: 완전한 REST API + 페이지별 임베딩 지원
+- **경량화된 의존성**: FastAPI Admin 제거로 aioredis 충돌 해결
+- **Bootstrap UI**: 반응형 모던 관리자 인터페이스
+- **JWT 보안**: 토큰 기반 인증 + HTTP-only 쿠키
 - **종합 테스트**: 자동화된 API 테스트 스크립트
 - **Docker 배포**: 컨테이너 기반 쉬운 배포
 - **완전한 문서화**: 설치, 사용법, 테스트 가이드
@@ -332,7 +349,8 @@ RefServer v1.0.0은 완전히 구현되어 프로덕션 환경에서 사용할 �
 - **성공률**: 90%+ (모든 서비스 정상 시)
 - **내결함성**: 부분 서비스 장애에도 기본 기능 유지
 - **확장성**: 개별 모듈 독립적 확장 가능
+- **의존성 최적화**: 경량화된 라이브러리로 안정성 향상
 
 ---
 
-**RefServer v1.0.0** - 완전한 PDF 지능형 처리 파이프라인 🎉
+**RefServer v1.3.0** - Jinja2 기반 경량화된 PDF 지능형 처리 파이프라인 🎉

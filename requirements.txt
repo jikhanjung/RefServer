@@ -14,7 +14,7 @@ torch
 transformers
 pillow
 sentence-transformers
-fastapi-admin
+jinja2
 aiofiles
 bcrypt
 python-jose[cryptography] 

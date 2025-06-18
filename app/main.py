@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Import processing modules
@@ -17,7 +18,7 @@ from db import (
     get_embedding_by_id, get_layout_by_id,
     get_page_embeddings_by_id, get_page_embedding_by_page
 )
-from admin import setup_admin
+from admin import router as admin_router
 
 # Configure logging
 logging.basicConfig(
@@ -526,5 +527,12 @@ async def not_found_handler(request, exc):
         content={"detail": "Resource not found"}
     )
 
-# Setup admin interface
-app = setup_admin(app)
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Include admin router
+app.include_router(admin_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

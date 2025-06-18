@@ -21,10 +21,23 @@ RefServer/
 │   ├── pipeline.py         # 전체 처리 흐름
 │   ├── ocr.py              # ocrmypdf 및 이미지 추출
 │   ├── ocr_quality.py      # llava를 이용한 OCR 품질 판단
-│   ├── embedding.py        # bge-m3 임베딩 처리
+│   ├── embedding.py        # bge-m3 임베딩 처리 (페이지별)
 │   ├── metadata.py         # LLM을 이용한 서지정보 추출
 │   ├── layout.py           # huridocs layout API 호출 처리
 │   ├── db.py               # SQLite 저장 및 질의
+│   ├── admin.py            # Jinja2 기반 관리자 인터페이스
+│   ├── auth.py             # 사용자 인증 및 보안
+│   ├── models.py           # Peewee ORM 모델 정의
+│   ├── init_db.py          # 데이터베이스 초기화 스크립트
+│   ├── templates/          # Jinja2 HTML 템플릿
+│   │   ├── base.html       # 기본 레이아웃
+│   │   ├── login.html      # 관리자 로그인
+│   │   ├── dashboard.html  # 관리자 대시보드
+│   │   ├── papers.html     # 논문 관리 페이지
+│   │   └── paper_detail.html # 논문 상세보기
+│   ├── static/             # 정적 파일 (CSS, JS)
+│   │   ├── css/admin.css   # 관리자 인터페이스 스타일
+│   │   └── js/admin.js     # 관리자 인터페이스 스크립트
 │   └── __init__.py
 ├── data/                   # PDF, 이미지, DB 등 저장소
 └── README.md
@@ -80,14 +93,16 @@ RefServer/
 - [x] docker-compose.yml 작성 (FastAPI + Huridocs + 외부 Ollama 연동)
 - [x] requirements.txt 및 requirements-test.txt 구성
 
-### ⚙️ 기능 모듈 - ✅ 완료 (9개 모듈)
-- [x] `models.py`: Peewee ORM 모델 (Paper, Embedding, Metadata, LayoutAnalysis)
+### ⚙️ 기능 모듈 - ✅ 완료 (11개 모듈)
+- [x] `models.py`: Peewee ORM 모델 (Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser)
 - [x] `db.py`: 완전한 CRUD 인터페이스 + 자동 마이그레이션
 - [x] `ocr.py`: ocrmypdf + 10개 언어 자동 감지 + 스마트 OCR
 - [x] `ocr_quality.py`: LLaVA 기반 OCR 품질 평가 (via Ollama)
-- [x] `embedding.py`: BGE-M3 임베딩 생성 + 로컬 모델 지원
+- [x] `embedding.py`: BGE-M3 페이지별 임베딩 생성 + 로컬 모델 지원
 - [x] `layout.py`: Huridocs layout API 연동 + 구조 분석
 - [x] `metadata.py`: 3단계 LLM 서지정보 추출 (구조화→단순→규칙 기반)
+- [x] `admin.py`: Jinja2 기반 관리자 인터페이스 (로그인, 대시보드, 논문 관리)
+- [x] `auth.py`: JWT 기반 사용자 인증 + bcrypt 비밀번호 해싱
 
 ### 🔁 파이프라인 - ✅ 완료
 - [x] `pipeline.py`: 7단계 통합 처리 파이프라인
@@ -337,12 +352,29 @@ python test_api.py --pdf /path/to/paper.pdf
         - **자동 초기화**: 기본 관리자 계정 자동 생성 (admin/admin123)
         - **접속 경로**: http://localhost:8000/admin
 
-    **🎯 RefServer v1.2.0 관리자 시스템 완성!**
-    - 완전한 프로덕션 준비 완료
-    - Docker Hub 배포 가능
-    - 종합 테스트 통과 (Layout Analysis 포함)
-    - 실제 학술 논문 처리 검증 완료
-    - 모든 7단계 파이프라인 정상 작동
-    - Docker Compose 볼륨 마운트 최적화 완료
-    - **페이지별 임베딩 시스템으로 정밀도 향상**
-    - **웹 기반 관리자 인터페이스로 운영 편의성 극대화**
+    - **🛠️ Jinja2 관리자 인터페이스 구현**
+        - **FastAPI Admin 의존성 문제 해결**: aioredis TimeoutError 충돌로 FastAPI Admin 제거
+        - **Jinja2 기반 관리자 시스템**: 
+            - 경량화된 HTML 템플릿 기반 관리 인터페이스
+            - Bootstrap 5 기반 반응형 디자인
+            - JWT 인증 + 세션 쿠키 관리
+        - **관리자 인터페이스 구성**: 
+            - `/admin/login` - 관리자 로그인 페이지
+            - `/admin/dashboard` - 통계 대시보드 (처리 현황, 서비스 상태)
+            - `/admin/papers` - 논문 관리 (검색, CRUD, 상세보기)
+            - `/admin/papers/{id}` - 논문 상세 정보 (메타데이터, 임베딩, 레이아웃)
+        - **UI/UX 기능**: 
+            - 실시간 처리 통계 (진행률 바, 상태 뱃지)
+            - 논문 검색 및 필터링
+            - 모달 기반 삭제 확인
+            - 반응형 테이블 및 카드 레이아웃
+        - **보안**: JWT 토큰 + HTTP-only 쿠키로 안전한 세션 관리
+        - **정적 파일**: CSS/JS 최적화 및 CDN Bootstrap 활용
+        - **접속 경로**: http://localhost:8000/admin
+
+    **🎯 RefServer v1.3.0 Jinja2 관리자 인터페이스 완성!**
+    - **의존성 최적화**: FastAPI Admin 제거로 aioredis 충돌 해결
+    - **경량화**: Jinja2 템플릿으로 단순하고 빠른 관리 인터페이스
+    - **사용자 친화적**: Bootstrap 기반 모던 UI/UX
+    - **완전한 관리 기능**: 논문 CRUD + 통계 대시보드
+    - **프로덕션 준비**: 보안 강화 및 최적화 완료
