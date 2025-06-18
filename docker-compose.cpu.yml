@@ -1,0 +1,18 @@
+# CPU-only configuration for RefServer
+# Usage: docker-compose -f docker-compose.cpu.yml up
+
+services:
+  refserver:
+    build: .
+    container_name: refserver
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=disabled  # Disable Ollama/LLaVA
+      - HURIDOCS_LAYOUT_URL=disabled  # Disable Huridocs
+      - CPU_ONLY_MODE=true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

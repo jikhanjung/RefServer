@@ -422,4 +422,4 @@ docker network inspect refserver_default
 
 ---
 
-**RefServer API Testing Guide v1.0.0** - 완전한 API 테스트 및 검증 가이드 ✅
+**RefServer API Testing Guide v0.1.0** - 완전한 API 테스트 및 검증 가이드 ✅
