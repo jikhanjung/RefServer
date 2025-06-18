@@ -331,6 +331,82 @@ async def delete_paper_post(request: Request, doc_id: str):
         return RedirectResponse(url=f"/admin/papers?error=Error deleting paper: {str(e)}", status_code=302)
 
 
+@router.get("/change-password", response_class=HTMLResponse)
+async def change_password_page(request: Request):
+    """Password change page"""
+    user = require_auth(request)
+    
+    return templates.TemplateResponse(
+        "change_password.html", 
+        {
+            "request": request, 
+            "user": user
+        }
+    )
+
+
+@router.post("/change-password")
+async def change_password_post(
+    request: Request, 
+    current_password: str = Form(...), 
+    new_password: str = Form(...), 
+    confirm_password: str = Form(...)
+):
+    """Process password change"""
+    user = require_auth(request)
+    
+    # Validate password confirmation
+    if new_password != confirm_password:
+        return templates.TemplateResponse(
+            "change_password.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "error": "New passwords do not match"
+            }
+        )
+    
+    # Validate password length
+    if len(new_password) < 6:
+        return templates.TemplateResponse(
+            "change_password.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "error": "Password must be at least 6 characters long"
+            }
+        )
+    
+    try:
+        # Change password using AuthManager
+        success = AuthManager.change_password(user.username, current_password, new_password)
+        
+        if success:
+            # Log out user for security (they need to login with new password)
+            response = RedirectResponse(url="/admin/login?message=Password changed successfully. Please login with your new password.", status_code=302)
+            response.delete_cookie(key="access_token")
+            return response
+        else:
+            return templates.TemplateResponse(
+                "change_password.html", 
+                {
+                    "request": request, 
+                    "user": user, 
+                    "error": "Current password is incorrect"
+                }
+            )
+            
+    except Exception as e:
+        return templates.TemplateResponse(
+            "change_password.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "error": f"Error changing password: {str(e)}"
+            }
+        )
+
+
 # Root redirect
 @router.get("/", response_class=HTMLResponse)
 async def admin_root(request: Request):

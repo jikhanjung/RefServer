@@ -58,6 +58,11 @@
                                 <i class="fas fa-project-diagram me-2"></i>Embeddings
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'change-password' in request.url.path %}active{% endif %}" href="/admin/change-password">
+                                <i class="fas fa-key me-2"></i>Change Password
+                            </a>
+                        </li>
                         {% if user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'users' in request.url.path %}active{% endif %}" href="/admin/users">
