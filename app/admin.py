@@ -12,7 +12,7 @@ import os
 
 from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
 from auth import AuthManager
-from db import get_paper_by_id, db
+from db import get_paper_by_id, get_page_embeddings_by_id, db
 
 
 # Initialize router and templates
@@ -98,21 +98,33 @@ def require_auth(request: Request) -> AdminUser:
 def get_stats() -> Dict[str, Any]:
     """Get dashboard statistics"""
     try:
+        # Use simpler counting approach to avoid SQL issues
         total_papers = Paper.select().count()
-        papers_with_metadata = Paper.select().where(
-            Paper.id.in_(Metadata.select(Metadata.paper))
-        ).count()
-        papers_with_embeddings = Paper.select().where(
-            Paper.id.in_(Embedding.select(Embedding.paper))
-        ).count()
-        papers_with_layout = Paper.select().where(
-            Paper.id.in_(LayoutAnalysis.select(LayoutAnalysis.paper))
-        ).count()
+        
+        # Count papers with each type of data
+        papers_with_metadata = 0
+        papers_with_embeddings = 0 
+        papers_with_layout = 0
+        papers_with_page_embeddings = 0
+        
+        for paper in Paper.select():
+            if Metadata.select().where(Metadata.paper == paper).exists():
+                papers_with_metadata += 1
+            if Embedding.select().where(Embedding.paper == paper).exists():
+                papers_with_embeddings += 1
+            if LayoutAnalysis.select().where(LayoutAnalysis.paper == paper).exists():
+                papers_with_layout += 1
+            if PageEmbedding.select().where(PageEmbedding.paper == paper).exists():
+                papers_with_page_embeddings += 1
+        
+        # Get total page embeddings count
+        total_page_embeddings = PageEmbedding.select().count()
         
         # Calculate processing rates
         metadata_rate = (papers_with_metadata / total_papers * 100) if total_papers > 0 else 0
         embedding_rate = (papers_with_embeddings / total_papers * 100) if total_papers > 0 else 0
         layout_rate = (papers_with_layout / total_papers * 100) if total_papers > 0 else 0
+        page_embedding_rate = (papers_with_page_embeddings / total_papers * 100) if total_papers > 0 else 0
         
         # Check service status (simplified)
         service_status = {
@@ -127,10 +139,13 @@ def get_stats() -> Dict[str, Any]:
             "papers_with_metadata": papers_with_metadata,
             "papers_with_embeddings": papers_with_embeddings,
             "papers_with_layout": papers_with_layout,
+            "papers_with_page_embeddings": papers_with_page_embeddings,
+            "total_page_embeddings": total_page_embeddings,
             "processing_rates": {
                 "metadata_rate": metadata_rate,
                 "embedding_rate": embedding_rate,
-                "layout_rate": layout_rate
+                "layout_rate": layout_rate,
+                "page_embedding_rate": page_embedding_rate
             },
             "service_status": service_status
         }
@@ -141,10 +156,13 @@ def get_stats() -> Dict[str, Any]:
             "papers_with_metadata": 0,
             "papers_with_embeddings": 0,
             "papers_with_layout": 0,
+            "papers_with_page_embeddings": 0,
+            "total_page_embeddings": 0,
             "processing_rates": {
                 "metadata_rate": 0,
                 "embedding_rate": 0,
-                "layout_rate": 0
+                "layout_rate": 0,
+                "page_embedding_rate": 0
             },
             "service_status": {
                 "database": False,
@@ -405,6 +423,113 @@ async def change_password_post(
                 "error": f"Error changing password: {str(e)}"
             }
         )
+
+
+@router.get("/page-embeddings", response_class=HTMLResponse)
+async def page_embeddings_list(request: Request, search: Optional[str] = None):
+    """Page embeddings management page"""
+    user = require_auth(request)
+    
+    try:
+        # Get statistics
+        stats = get_stats()
+        
+        # Get papers with page embeddings
+        if search:
+            papers_query = (Paper
+                          .select()
+                          .where(
+                              Paper.filename.contains(search) &
+                              Paper.id.in_(PageEmbedding.select(PageEmbedding.paper))
+                          )
+                          .order_by(Paper.created_at.desc()))
+        else:
+            papers_query = (Paper
+                          .select()
+                          .where(Paper.id.in_(PageEmbedding.select(PageEmbedding.paper)))
+                          .order_by(Paper.created_at.desc()))
+        
+        papers_list = []
+        for paper in papers_query:
+            # Get page embedding statistics for this paper
+            page_embs = list(PageEmbedding.select().where(PageEmbedding.paper == paper))
+            if page_embs:
+                avg_vector_dim = page_embs[0].vector_dim  # All should be same
+                model_name = page_embs[0].model_name
+                paper.page_count = len(page_embs)
+                paper.avg_vector_dim = avg_vector_dim
+                paper.model_name = model_name
+                papers_list.append(paper)
+        
+        return templates.TemplateResponse(
+            "page_embeddings.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "papers": papers_list,
+                "stats": stats
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "page_embeddings.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "papers": [],
+                "stats": get_stats(),
+                "error": f"Error loading page embeddings: {str(e)}"
+            }
+        )
+
+
+@router.get("/page-embeddings/{doc_id}", response_class=HTMLResponse)
+async def page_embedding_detail(request: Request, doc_id: str):
+    """Page embedding detail page"""
+    user = require_auth(request)
+    
+    try:
+        paper = get_paper_by_id(doc_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        
+        # Get page embeddings for this paper
+        page_embeddings = list(
+            PageEmbedding
+            .select()
+            .where(PageEmbedding.paper == paper)
+            .order_by(PageEmbedding.page_number)
+        )
+        
+        return templates.TemplateResponse(
+            "page_embedding_detail.html", 
+            {
+                "request": request, 
+                "user": user, 
+                "paper": paper,
+                "page_embeddings": page_embeddings
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading page embedding detail: {str(e)}")
+
+
+@router.get("/upload", response_class=HTMLResponse)
+async def upload_page(request: Request):
+    """PDF upload page"""
+    user = require_auth(request)
+    
+    return templates.TemplateResponse(
+        "upload.html", 
+        {
+            "request": request, 
+            "user": user
+        }
+    )
 
 
 # Root redirect

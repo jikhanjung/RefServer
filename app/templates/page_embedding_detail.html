@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{{ paper.filename }} - Page Embeddings Detail{% endblock %}
+{% block header %}Page Embeddings Detail{% endblock %}
+
+{% block actions %}
+<div class="btn-group" role="group">
+    <a href="/admin/page-embeddings" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Page Embeddings
+    </a>
+    <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-info">
+        <i class="fas fa-file-alt me-2"></i>View Paper
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <!-- Paper Information -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-file-pdf text-danger me-2"></i>Paper Info
+                </h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Filename:</strong> {{ paper.filename }}</p>
+                <p><strong>Document ID:</strong> <code>{{ paper.doc_id }}</code></p>
+                <p><strong>Total Pages:</strong> <span class="badge bg-primary">{{ page_embeddings|length }}</span></p>
+                {% if page_embeddings %}
+                <p><strong>Model:</strong> {{ page_embeddings[0].model_name }}</p>
+                <p><strong>Vector Dimension:</strong> {{ page_embeddings[0].vector_dim }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title">Statistics</h5>
+            </div>
+            <div class="card-body">
+                {% if page_embeddings %}
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-success">{{ page_embeddings|length }}</h4>
+                        <small class="text-muted">Total Pages</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-info">{{ page_embeddings[0].vector_dim }}</h4>
+                        <small class="text-muted">Vector Dim</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="mb-2">
+                    <strong>Text Length Distribution:</strong>
+                </div>
+                {% set text_lengths = [] %}
+                {% for page in page_embeddings %}
+                    {% set _ = text_lengths.append(page.page_text|length if page.page_text else 0) %}
+                {% endfor %}
+                
+                {% if text_lengths %}
+                <small class="text-muted">
+                    Min: {{ text_lengths|min }} chars<br>
+                    Max: {{ text_lengths|max }} chars<br>
+                    Avg: {{ (text_lengths|sum / text_lengths|length)|round|int }} chars
+                </small>
+                {% endif %}
+                {% else %}
+                <p class="text-muted">No page embeddings found</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <!-- Page Embeddings List -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Page Embeddings ({{ page_embeddings|length }})</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if page_embeddings %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Page #</th>
+                                <th>Text Preview</th>
+                                <th>Text Length</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for page_emb in page_embeddings %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-primary">{{ page_emb.page_number }}</span>
+                                </td>
+                                <td>
+                                    {% if page_emb.page_text %}
+                                        <span class="text-muted small">
+                                            {{ page_emb.page_text[:100] }}{% if page_emb.page_text|length > 100 %}...{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">No text</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if page_emb.page_text %}
+                                        {{ page_emb.page_text|length }} chars
+                                    {% else %}
+                                        0 chars
+                                    {% endif %}
+                                </td>
+                                <td>{{ page_emb.created_at.strftime('%m-%d %H:%M') }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-info" 
+                                                onclick="showPageText({{ page_emb.page_number }}, '{{ page_emb.page_text|replace("'", "\\'") if page_emb.page_text else '' }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" 
+                                                onclick="downloadVector({{ page_emb.page_number }})">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No page embeddings found</h5>
+                    <p class="text-muted">This paper has not been processed for page embeddings yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Page Text Modal -->
+<div class="modal fade" id="pageTextModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pageTextModalTitle">Page Text</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="pageTextContent" class="border p-3" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showPageText(pageNumber, pageText) {
+    document.getElementById('pageTextModalTitle').textContent = `Page ${pageNumber} Text`;
+    document.getElementById('pageTextContent').textContent = pageText || 'No text content available';
+    new bootstrap.Modal(document.getElementById('pageTextModal')).show();
+}
+
+function downloadVector(pageNumber) {
+    // This would need to be implemented with an API endpoint
+    const url = `/embedding/{{ paper.doc_id }}/page/${pageNumber}`;
+    window.open(url, '_blank');
+}
+</script>
+{% endblock %}

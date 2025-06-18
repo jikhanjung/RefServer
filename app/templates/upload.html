@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Upload PDF - RefServer Admin{% endblock %}
+{% block header %}Upload PDF{% endblock %}
+
+{% block actions %}
+<div class="btn-group" role="group">
+    <a href="/admin/papers" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Papers
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-upload me-2"></i>Upload PDF for Processing
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ error }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
+
+                <form id="uploadForm" action="/process" method="post" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label for="file" class="form-label">Select PDF File</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".pdf" required>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Maximum file size: 50MB. Only PDF files are allowed.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-cogs me-2"></i>Processing Pipeline
+                                </h6>
+                                <p class="card-text small text-muted mb-3">
+                                    Your PDF will go through the following processing steps:
+                                </p>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled small">
+                                            <li><i class="fas fa-check text-success me-2"></i>OCR & Text Extraction</li>
+                                            <li><i class="fas fa-check text-success me-2"></i>Quality Assessment</li>
+                                            <li><i class="fas fa-check text-success me-2"></i>Page-level Embeddings</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled small">
+                                            <li><i class="fas fa-check text-success me-2"></i>Layout Analysis</li>
+                                            <li><i class="fas fa-check text-success me-2"></i>Metadata Extraction</li>
+                                            <li><i class="fas fa-check text-success me-2"></i>Database Storage</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="uploadBtn">
+                            <i class="fas fa-upload me-2"></i>Upload and Process PDF
+                        </button>
+                        <a href="/admin/papers" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-muted">
+                <small>
+                    <i class="fas fa-clock me-1"></i>
+                    Processing typically takes 1-3 minutes depending on document size and complexity.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Progress Modal -->
+<div class="modal fade" id="processingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cogs me-2"></i>Processing PDF
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <h6 id="processingStatus">Uploading file...</h6>
+                <p class="text-muted small mb-3" id="processingDescription">
+                    Please wait while your PDF is being processed through our AI pipeline.
+                </p>
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" id="progressBar">
+                        0%
+                    </div>
+                </div>
+                <div class="text-start">
+                    <small class="text-muted">
+                        <strong>Processing Steps:</strong><br>
+                        <span id="stepsList">
+                            • Uploading and validating file...<br>
+                        </span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    // Show processing modal
+    const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+    modal.show();
+    
+    // Simulate progress (since we can't get real-time progress from backend)
+    simulateProgress();
+});
+
+function simulateProgress() {
+    const progressBar = document.getElementById('progressBar');
+    const statusElement = document.getElementById('processingStatus');
+    const descriptionElement = document.getElementById('processingDescription');
+    const stepsElement = document.getElementById('stepsList');
+    
+    const steps = [
+        { progress: 10, status: "Uploading file...", desc: "Validating PDF format and size", step: "• File uploaded successfully<br>" },
+        { progress: 25, status: "Performing OCR...", desc: "Extracting text and detecting language", step: "• OCR processing completed<br>" },
+        { progress: 40, status: "Assessing quality...", desc: "Analyzing document quality with LLaVA", step: "• Quality assessment finished<br>" },
+        { progress: 60, status: "Generating embeddings...", desc: "Creating page-level embeddings with BGE-M3", step: "• Page embeddings generated<br>" },
+        { progress: 75, status: "Analyzing layout...", desc: "Processing document structure", step: "• Layout analysis completed<br>" },
+        { progress: 90, status: "Extracting metadata...", desc: "Identifying title, authors, and journal info", step: "• Metadata extraction finished<br>" },
+        { progress: 100, status: "Saving to database...", desc: "Storing processed data", step: "• Database storage completed<br>" }
+    ];
+    
+    let currentStep = 0;
+    let accumulatedSteps = "• Uploading and validating file...<br>";
+    
+    function updateProgress() {
+        if (currentStep < steps.length) {
+            const step = steps[currentStep];
+            progressBar.style.width = step.progress + '%';
+            progressBar.textContent = step.progress + '%';
+            statusElement.textContent = step.status;
+            descriptionElement.textContent = step.desc;
+            
+            accumulatedSteps += step.step;
+            stepsElement.innerHTML = accumulatedSteps;
+            
+            currentStep++;
+            
+            // Randomize timing to make it feel more realistic
+            const delay = 1000 + Math.random() * 2000; // 1-3 seconds
+            setTimeout(updateProgress, delay);
+        }
+    }
+    
+    // Start after a short delay
+    setTimeout(updateProgress, 1000);
+}
+
+// File validation
+document.getElementById('file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const uploadBtn = document.getElementById('uploadBtn');
+    
+    if (file) {
+        if (file.type !== 'application/pdf') {
+            alert('Please select a PDF file.');
+            e.target.value = '';
+            return;
+        }
+        
+        if (file.size > 50 * 1024 * 1024) { // 50MB
+            alert('File size must be less than 50MB.');
+            e.target.value = '';
+            return;
+        }
+        
+        uploadBtn.innerHTML = `<i class="fas fa-upload me-2"></i>Upload "${file.name}"`;
+    } else {
+        uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload and Process PDF';
+    }
+});
+</script>
+{% endblock %}

@@ -54,8 +54,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'embeddings' in request.url.path %}active{% endif %}" href="/admin/embeddings">
+                            <a class="nav-link {% if 'embeddings' in request.url.path and 'page-embeddings' not in request.url.path %}active{% endif %}" href="/admin/embeddings">
                                 <i class="fas fa-project-diagram me-2"></i>Embeddings
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'page-embeddings' in request.url.path %}active{% endif %}" href="/admin/page-embeddings">
+                                <i class="fas fa-layer-group me-2"></i>Page Embeddings
                             </a>
                         </li>
                         <li class="nav-item">
