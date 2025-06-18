@@ -321,7 +321,23 @@ python test_api.py --pdf /path/to/paper.pdf
         - **파이프라인 통합**: Step 4를 "Page-level Embedding Generation"으로 변경
         - **마이그레이션 지원**: migrate.py에 PageEmbedding 모델 추가
 
-    **🎯 RefServer v1.1.0 페이지별 임베딩 완성!**
+    - **🔐 FastAPI Admin 관리자 시스템 구현**
+        - **FastAPI Admin 통합**: 웹 기반 관리자 인터페이스 구축
+        - **DB 기반 사용자 관리**: AdminUser 모델로 다중 관리자 계정 지원
+        - **보안 강화**: 
+            - bcrypt 해싱으로 안전한 비밀번호 저장
+            - 세션 기반 인증 시스템
+            - 계정 활성화/비활성화 관리
+            - 슈퍼유저 권한 분리
+        - **관리 기능**: 
+            - Papers, Metadata, Embeddings, Layout Analysis 관리
+            - 검색, 필터링, 페이지네이션 지원
+            - CRUD 작업 (생성, 조회, 수정, 삭제)
+        - **CLI 관리 도구**: manage_admin.py - 관리자 계정 생성/관리
+        - **자동 초기화**: 기본 관리자 계정 자동 생성 (admin/admin123)
+        - **접속 경로**: http://localhost:8000/admin
+
+    **🎯 RefServer v1.2.0 관리자 시스템 완성!**
     - 완전한 프로덕션 준비 완료
     - Docker Hub 배포 가능
     - 종합 테스트 통과 (Layout Analysis 포함)
@@ -329,3 +345,4 @@ python test_api.py --pdf /path/to/paper.pdf
     - 모든 7단계 파이프라인 정상 작동
     - Docker Compose 볼륨 마운트 최적화 완료
     - **페이지별 임베딩 시스템으로 정밀도 향상**
+    - **웹 기반 관리자 인터페이스로 운영 편의성 극대화**

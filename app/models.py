@@ -103,6 +103,24 @@ class LayoutAnalysis(BaseModel):
         """Set layout data from Python dict"""
         self.layout_json = json.dumps(layout_dict)
 
+class AdminUser(BaseModel):
+    """Model for admin user authentication"""
+    username = CharField(unique=True, max_length=50)
+    email = CharField(unique=True, max_length=100, null=True)
+    password_hash = CharField(max_length=255)  # bcrypt hashed password
+    full_name = CharField(max_length=100, null=True)
+    is_active = BooleanField(default=True)
+    is_superuser = BooleanField(default=False)
+    last_login = DateTimeField(null=True)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('username',), True),  # Unique index on username
+            (('email',), False),    # Index on email
+        )
+
 def compute_content_id(embedding_vector):
     """
     Compute SHA-256 hash from embedding vector for content-based deduplication

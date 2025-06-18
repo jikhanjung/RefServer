@@ -59,7 +59,7 @@ def main():
     print(f"Migration name: {migration_name}")
     
     # Create migration for all models
-    models_to_migrate = [Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis]
+    models_to_migrate = [Paper, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser]
     
     try:
         ret = router.create(auto=models_to_migrate, name=migration_name)

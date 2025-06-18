@@ -13,4 +13,8 @@ langdetect
 torch
 transformers
 pillow
-sentence-transformers 
+sentence-transformers
+fastapi-admin
+aiofiles
+bcrypt
+python-jose[cryptography] 

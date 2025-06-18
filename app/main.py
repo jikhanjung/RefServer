@@ -17,6 +17,7 @@ from db import (
     get_embedding_by_id, get_layout_by_id,
     get_page_embeddings_by_id, get_page_embedding_by_page
 )
+from admin import setup_admin
 
 # Configure logging
 logging.basicConfig(
@@ -524,3 +525,6 @@ async def not_found_handler(request, exc):
         status_code=404,
         content={"detail": "Resource not found"}
     )
+
+# Setup admin interface
+app = setup_admin(app)
