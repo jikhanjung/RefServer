@@ -10,7 +10,10 @@ import time
 # Import all processing modules
 from ocr import process_pdf_with_ocr, extract_page_texts_from_pdf
 from ocr_quality import assess_document_quality, is_quality_assessment_available
-from embedding import generate_page_embeddings, compute_document_embedding_from_pages
+from embedding import (
+    generate_page_embeddings, compute_document_embedding_from_pages,
+    check_duplicate_by_similarity
+)
 from layout import analyze_pdf_layout, is_layout_service_available
 from metadata import extract_paper_metadata, is_metadata_service_available
 from db import (
@@ -20,6 +23,7 @@ from db import (
 )
 from models import compute_content_id
 from version import get_version
+from duplicate_detector import get_duplicate_detector
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +96,56 @@ class PDFProcessingPipeline:
             pdf_final_path = self.pdfs_dir / f"{doc_id}.pdf"
             shutil.copy2(pdf_file_path, pdf_final_path)
             logger.info(f"PDF saved to: {pdf_final_path}")
+            
+            # Step 0: Multi-layer Duplicate Detection
+            logger.info("Step 0: Multi-layer Duplicate Detection")
+            if progress_callback:
+                progress_callback("Checking for duplicates", 5)
+            try:
+                detector = get_duplicate_detector()
+                duplicate_doc_id, detection_layer, detection_time = detector.check_all_layers(
+                    str(pdf_final_path), filename
+                )
+                
+                if duplicate_doc_id:
+                    # Duplicate found - return existing paper info
+                    logger.info(f"🎯 Duplicate detected via {detection_layer} in {detection_time:.2f}s")
+                    result['success'] = True
+                    result['doc_id'] = duplicate_doc_id  # Use existing paper's doc_id
+                    result['data']['duplicate_detection'] = {
+                        'is_duplicate': True,
+                        'existing_doc_id': duplicate_doc_id,
+                        'detection_layer': detection_layer,
+                        'detection_time': detection_time
+                    }
+                    result['steps_completed'].append('duplicate_detection')
+                    result['warnings'].append(f"Duplicate content detected via {detection_layer}")
+                    
+                    # Clean up uploaded file since we're using existing one
+                    try:
+                        os.remove(pdf_final_path)
+                        if temp_dir and temp_dir.exists():
+                            shutil.rmtree(temp_dir)
+                    except:
+                        pass
+                    
+                    result['processing_time'] = time.time() - start_time
+                    return result
+                else:
+                    # No duplicate found - proceed with normal processing
+                    result['data']['duplicate_detection'] = {
+                        'is_duplicate': False,
+                        'detection_time': detection_time,
+                        'checked_layers': ['file_hash', 'content_hash', 'sample_embedding']
+                    }
+                    result['steps_completed'].append('duplicate_detection')
+                    logger.info(f"✅ No duplicates found in {detection_time:.2f}s - proceeding with processing")
+                    
+            except Exception as e:
+                logger.error(f"Duplicate detection failed: {e}")
+                result['steps_failed'].append('duplicate_detection')
+                result['warnings'].append(f"Duplicate detection failed: {str(e)}")
+                # Continue with normal processing even if duplicate detection fails
             
             # Step 1: Save initial paper record
             logger.info("Step 1: Saving initial paper record")
@@ -205,43 +259,60 @@ class PDFProcessingPipeline:
                                     # Compute content ID for deduplication
                                     content_id = compute_content_id(document_embedding)
                                     
-                                    # Check for duplicates
+                                    # Check for duplicates using both methods
                                     existing_paper = get_paper_by_content_id(content_id)
+                                    duplicate_doc_id = None
+                                    
                                     if existing_paper and existing_paper.doc_id != doc_id:
+                                        duplicate_doc_id = existing_paper.doc_id
+                                        logger.warning(f"🔍 Content ID duplicate detected: {duplicate_doc_id}")
+                                    else:
+                                        # Also check ChromaDB for similarity-based duplicates
+                                        similarity_duplicate = check_duplicate_by_similarity(document_embedding, similarity_threshold=0.95)
+                                        if similarity_duplicate and similarity_duplicate != doc_id:
+                                            duplicate_doc_id = similarity_duplicate
+                                            logger.warning(f"🔍 Similarity-based duplicate detected: {duplicate_doc_id}")
+                                    
+                                    if duplicate_doc_id:
                                         # Duplicate content detected - reuse existing paper data
-                                        logger.warning(f"Duplicate content detected! Reusing existing paper: {existing_paper.doc_id}")
-                                        result['warnings'].append(f"Similar content detected (ID: {existing_paper.doc_id})")
+                                        result['warnings'].append(f"Similar content detected (ID: {duplicate_doc_id})")
                                         
                                         # Return existing paper's doc_id for consistency
-                                        result['doc_id'] = existing_paper.doc_id
-                                        result['data']['duplicate_of'] = existing_paper.doc_id
+                                        result['doc_id'] = duplicate_doc_id
+                                        result['data']['duplicate_of'] = duplicate_doc_id
                                         result['data']['embedding'] = {
                                             'dimension': len(document_embedding),
                                             'content_id': content_id,
                                             'page_count': page_count,
                                             'pages_with_embeddings': len(page_embeddings_data),
-                                            'reused_existing': True
+                                            'reused_existing': True,
+                                            'detection_method': 'content_id' if existing_paper else 'similarity'
                                         }
                                         
                                         # Skip saving embedding and updating paper to avoid constraint error
                                         result['steps_completed'].append('embedding')
-                                        logger.info(f"Reused existing document embedding: {existing_paper.doc_id}")
+                                        logger.info(f"✅ Reused existing document embedding: {duplicate_doc_id}")
                                     else:
                                         # No duplicate found or same document - proceed normally
-                                        # Save document-level embedding
-                                        save_embedding(doc_id, document_embedding)
+                                        # Save document-level embedding to ChromaDB
+                                        embedding_success = save_embedding(doc_id, document_embedding)
                                         
-                                        # Update paper with content_id (safe since no duplicate exists)
-                                        paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
-                                        
-                                        result['data']['embedding'] = {
-                                            'dimension': len(document_embedding),
-                                            'content_id': content_id,
-                                            'page_count': page_count,
-                                            'pages_with_embeddings': len(page_embeddings_data)
-                                        }
-                                        result['steps_completed'].append('embedding')
-                                        logger.info(f"Document embedding generated from {page_count} pages: {len(document_embedding)} dimensions")
+                                        if embedding_success:
+                                            # Update paper with content_id (safe since no duplicate exists)
+                                            paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
+                                            
+                                            result['data']['embedding'] = {
+                                                'dimension': len(document_embedding),
+                                                'content_id': content_id,
+                                                'page_count': page_count,
+                                                'pages_with_embeddings': len(page_embeddings_data),
+                                                'saved_to_chromadb': True
+                                            }
+                                            result['steps_completed'].append('embedding')
+                                            logger.info(f"✅ Document embedding generated and saved to ChromaDB: {len(document_embedding)} dimensions")
+                                        else:
+                                            result['warnings'].append("Failed to save embedding to ChromaDB")
+                                            logger.warning(f"⚠️ Failed to save embedding to ChromaDB for {doc_id}")
                                 else:
                                     raise Exception("Failed to generate valid document embedding from pages")
                             else:
@@ -331,8 +402,35 @@ class PDFProcessingPipeline:
                 result['steps_failed'].append('metadata')
                 result['warnings'].append(f"Metadata extraction failed: {str(e)}")
             
-            # Step 7: Cleanup and Finalization
-            logger.info("Step 7: Cleanup and Finalization")
+            # Step 7: Save Duplicate Prevention Hashes
+            logger.info("Step 7: Saving Duplicate Prevention Hashes")
+            if progress_callback:
+                progress_callback("Saving duplicate prevention hashes", 90)
+            try:
+                # Only save hashes if processing was not a duplicate and was successful
+                if not result['data'].get('duplicate_detection', {}).get('is_duplicate', False):
+                    detector = get_duplicate_detector()
+                    hash_results = detector.save_all_hashes(str(pdf_final_path), filename, doc_id)
+                    
+                    result['data']['duplicate_prevention_hashes'] = {
+                        'file_hash_saved': hash_results.get('file_hash', False),
+                        'content_hash_saved': hash_results.get('content_hash', False),
+                        'sample_embedding_hash_saved': hash_results.get('sample_embedding_hash', False)
+                    }
+                    
+                    saved_count = sum(hash_results.values())
+                    logger.info(f"✅ Saved {saved_count}/3 duplicate prevention hashes")
+                    result['steps_completed'].append('save_hashes')
+                else:
+                    logger.info("⏭️  Skipping hash saving for duplicate document")
+                    
+            except Exception as e:
+                logger.error(f"Hash saving failed: {e}")
+                result['steps_failed'].append('save_hashes')
+                result['warnings'].append(f"Hash saving failed: {str(e)}")
+            
+            # Step 8: Cleanup and Finalization
+            logger.info("Step 8: Cleanup and Finalization")
             if progress_callback:
                 progress_callback("Finalizing", 95)
             try:

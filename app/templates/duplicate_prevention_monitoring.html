@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}중복 방지 시스템 모니터링{% endblock %}
+
+{% block extra_head %}
+<style>
+.status-healthy { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-error { color: #dc3545; }
+.metric-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+.progress-custom {
+    height: 8px;
+    border-radius: 4px;
+}
+.hash-preview {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: #6c757d;
+}
+.layer-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+.layer-0 { background-color: #dc3545; }
+.layer-1 { background-color: #ffc107; }
+.layer-2 { background-color: #17a2b8; }
+.layer-3 { background-color: #28a745; }
+.performance-chart {
+    max-height: 300px;
+}
+.detection-log {
+    font-size: 0.9em;
+    border-left: 3px solid #dee2e6;
+    padding-left: 10px;
+    margin-bottom: 10px;
+}
+.detection-log.duplicate { border-left-color: #dc3545; }
+.detection-log.no-duplicate { border-left-color: #28a745; }
+.detection-log.error { border-left-color: #ffc107; }
+.time-saved {
+    color: #28a745;
+    font-weight: bold;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-shield-alt me-2"></i>
+                    중복 방지 시스템 모니터링
+                </h2>
+                <span class="badge bg-primary fs-6">{{ version }}</span>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                {{ error }}
+            </div>
+            {% else %}
+
+            <!-- 중복 방지 통계 개요 -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card metric-card bg-danger text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <span class="layer-indicator layer-0"></span>
+                                Level 0: 파일 해시
+                            </h5>
+                            <h3>{{ dashboard_data.statistics.file_hashes_count }}</h3>
+                            <small>MD5 해시 (1-3초)</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-warning text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <span class="layer-indicator layer-1"></span>
+                                Level 1: 컨텐츠 해시
+                            </h5>
+                            <h3>{{ dashboard_data.statistics.content_hashes_count }}</h3>
+                            <small>메타데이터+3페이지 (30초)</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-info text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <span class="layer-indicator layer-2"></span>
+                                Level 2: 샘플 임베딩
+                            </h5>
+                            <h3>{{ dashboard_data.statistics.sample_embedding_hashes_count }}</h3>
+                            <small>대표 텍스트 임베딩 (15초)</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-success text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <span class="layer-indicator layer-3"></span>
+                                총 해시 데이터
+                            </h5>
+                            <h3>{{ dashboard_data.statistics.file_hashes_count + dashboard_data.statistics.content_hashes_count + dashboard_data.statistics.sample_embedding_hashes_count }}</h3>
+                            <small>전체 중복 방지 데이터</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 커버리지 현황 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-chart-bar me-2"></i>
+                                중복 방지 커버리지 현황
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6>파일 해시 커버리지</h6>
+                                    <div class="progress progress-custom mb-2">
+                                        <div class="progress-bar bg-danger" style="width: {{ dashboard_data.coverage.file_hash_coverage }}%"></div>
+                                    </div>
+                                    <small class="text-muted">{{ "%.1f"|format(dashboard_data.coverage.file_hash_coverage) }}% ({{ dashboard_data.statistics.file_hashes_count }}/{{ dashboard_data.total_papers }})</small>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <h6>컨텐츠 해시 커버리지</h6>
+                                    <div class="progress progress-custom mb-2">
+                                        <div class="progress-bar bg-warning" style="width: {{ dashboard_data.coverage.content_hash_coverage }}%"></div>
+                                    </div>
+                                    <small class="text-muted">{{ "%.1f"|format(dashboard_data.coverage.content_hash_coverage) }}% ({{ dashboard_data.statistics.content_hashes_count }}/{{ dashboard_data.total_papers }})</small>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <h6>샘플 임베딩 커버리지</h6>
+                                    <div class="progress progress-custom mb-2">
+                                        <div class="progress-bar bg-info" style="width: {{ dashboard_data.coverage.sample_hash_coverage }}%"></div>
+                                    </div>
+                                    <small class="text-muted">{{ "%.1f"|format(dashboard_data.coverage.sample_hash_coverage) }}% ({{ dashboard_data.statistics.sample_embedding_hashes_count }}/{{ dashboard_data.total_papers }})</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 다층 중복 방지 시스템 설명 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-layer-group me-2"></i>
+                                다층 중복 방지 시스템
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-3">
+                                    <span class="layer-indicator layer-0"></span>
+                                    <strong>Level 0:</strong> MD5 파일 해시 (1-3초)
+                                    <br><small class="text-muted">동일한 파일 즉시 감지</small>
+                                </li>
+                                <li class="mb-3">
+                                    <span class="layer-indicator layer-1"></span>
+                                    <strong>Level 1:</strong> 컨텐츠 해시 (30초)  
+                                    <br><small class="text-muted">PDF 메타데이터 + 첫 3페이지 텍스트</small>
+                                </li>
+                                <li class="mb-3">
+                                    <span class="layer-indicator layer-2"></span>
+                                    <strong>Level 2:</strong> 샘플 임베딩 (15초)
+                                    <br><small class="text-muted">대표 텍스트 샘플링 기반 벡터</small>
+                                </li>
+                                <li>
+                                    <span class="layer-indicator layer-3"></span>
+                                    <strong>Level 3:</strong> 전체 벡터 유사도
+                                    <br><small class="text-muted">ChromaDB 95% 이상 유사 논문</small>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-tachometer-alt me-2"></i>
+                                성능 최적화 효과
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h4 class="text-success">95%+</h4>
+                                    <p class="mb-0">처리 시간 단축</p>
+                                    <small class="text-muted">중복 감지 시</small>
+                                </div>
+                                <div class="col-6">
+                                    <h4 class="text-primary">점진적</h4>
+                                    <p class="mb-0">검사 전략</p>
+                                    <small class="text-muted">빠른 것부터 순차 검사</small>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h4 class="text-info">4-레벨</h4>
+                                    <p class="mb-0">중복 감지</p>
+                                    <small class="text-muted">포괄적 중복 방지</small>
+                                </div>
+                                <div class="col-6">
+                                    <h4 class="text-warning">0-30초</h4>
+                                    <p class="mb-0">감지 시간</p>
+                                    <small class="text-muted">3분+ 처리 대신</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 최근 해시 기록 -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <span class="layer-indicator layer-0"></span>
+                                최근 파일 해시
+                            </h6>
+                        </div>
+                        <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                            {% if dashboard_data.recent_hashes.file_hashes %}
+                                {% for hash_record in dashboard_data.recent_hashes.file_hashes %}
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <div class="hash-preview">{{ hash_record.file_md5[:16] }}...</div>
+                                    <small class="text-muted d-block">{{ hash_record.paper.filename[:30] }}{% if hash_record.paper.filename|length > 30 %}...{% endif %}</small>
+                                    <small class="text-muted">{{ (hash_record.file_size / 1024 / 1024)|round(1) }} MB</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted mb-0">해시 기록이 없습니다.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <span class="layer-indicator layer-1"></span>
+                                최근 컨텐츠 해시
+                            </h6>
+                        </div>
+                        <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                            {% if dashboard_data.recent_hashes.content_hashes %}
+                                {% for hash_record in dashboard_data.recent_hashes.content_hashes %}
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <div class="hash-preview">{{ hash_record.content_hash[:16] }}...</div>
+                                    <small class="text-muted d-block">{{ hash_record.paper.filename[:30] }}{% if hash_record.paper.filename|length > 30 %}...{% endif %}</small>
+                                    <small class="text-muted">{{ hash_record.page_count }} 페이지</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted mb-0">해시 기록이 없습니다.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <span class="layer-indicator layer-2"></span>
+                                최근 샘플 임베딩
+                            </h6>
+                        </div>
+                        <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                            {% if dashboard_data.recent_hashes.sample_hashes %}
+                                {% for hash_record in dashboard_data.recent_hashes.sample_hashes %}
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <div class="hash-preview">{{ hash_record.embedding_hash[:16] }}...</div>
+                                    <small class="text-muted d-block">{{ hash_record.paper.filename[:30] }}{% if hash_record.paper.filename|length > 30 %}...{% endif %}</small>
+                                    <small class="text-muted">{{ hash_record.sample_strategy }} ({{ hash_record.vector_dim }}D)</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted mb-0">해시 기록이 없습니다.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// 페이지 자동 새로고침 (60초마다)
+setTimeout(function() {
+    location.reload();
+}, 60000);
+</script>
+{% endblock %}

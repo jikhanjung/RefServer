@@ -194,6 +194,79 @@ class AdminUser(BaseModel):
             (('email',), False),    # Index on email
         )
 
+
+class FileHash(BaseModel):
+    """Model for Level 0 duplicate prevention: MD5 file hash"""
+    file_md5 = CharField(primary_key=True)  # MD5 hash of file content
+    file_size = BigIntegerField()  # File size in bytes
+    original_filename = CharField()  # First uploaded filename
+    paper = ForeignKeyField(Paper, backref='file_hashes', on_delete='CASCADE')
+    created_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('file_size',), False),
+        )
+
+
+class ContentHash(BaseModel):
+    """Model for Level 1 duplicate prevention: Quick content hash"""
+    content_hash = CharField(primary_key=True)  # SHA-256 of PDF metadata + first 3 pages text
+    pdf_title = CharField(null=True)  # PDF metadata title
+    pdf_author = CharField(null=True)  # PDF metadata author
+    pdf_creator = CharField(null=True)  # PDF creator
+    first_three_pages_text = TextField(null=True)  # First 3 pages text (truncated)
+    page_count = IntegerField()  # Total pages
+    paper = ForeignKeyField(Paper, backref='content_hashes', on_delete='CASCADE')
+    created_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('page_count',), False),
+        )
+
+
+class SampleEmbeddingHash(BaseModel):
+    """Model for Level 2 duplicate prevention: Sample embedding hash"""
+    embedding_hash = CharField(primary_key=True)  # SHA-256 of sample embedding vector
+    sample_strategy = CharField()  # 'first_last_middle' or 'random_pages'
+    sample_text = TextField(null=True)  # Representative text sample
+    embedding_vector = BlobField()  # Serialized sample embedding vector
+    vector_dim = IntegerField()  # Vector dimension
+    model_name = CharField(default='bge-m3')  # Embedding model used
+    paper = ForeignKeyField(Paper, backref='sample_embeddings', on_delete='CASCADE')
+    created_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('sample_strategy',), False),
+        )
+
+
+class DuplicateDetectionLog(BaseModel):
+    """Model for tracking duplicate detection performance metrics"""
+    detection_id = CharField(primary_key=True)  # UUID4 detection identifier
+    filename = CharField()  # Original filename being checked
+    file_size = BigIntegerField()  # File size in bytes
+    detection_result = CharField()  # 'duplicate_found' or 'no_duplicate' or 'error'
+    detection_layer = CharField(null=True)  # 'Level_0_File_Hash', 'Level_1_Content_Hash', 'Level_2_Sample_Embedding', 'No_Duplicate', 'Error'
+    duplicate_paper_id = CharField(null=True)  # Document ID of duplicate paper if found
+    total_processing_time = FloatField()  # Total time for all layers checked (seconds)
+    layer_0_time = FloatField(null=True)  # Time for Level 0 (file hash)
+    layer_1_time = FloatField(null=True)  # Time for Level 1 (content hash)
+    layer_2_time = FloatField(null=True)  # Time for Level 2 (sample embedding)
+    time_saved = FloatField(null=True)  # Estimated time saved by duplicate detection (seconds)
+    error_message = TextField(null=True)  # Error details if detection failed
+    created_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        indexes = (
+            (('detection_layer',), False),
+            (('detection_result',), False),
+            (('created_at',), False),
+        )
+
+
 def compute_content_id(embedding_vector):
     """
     Compute SHA-256 hash from embedding vector for content-based deduplication

@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer
 import re
 from typing import List, Optional
 import gc
+from vector_db import get_vector_db
 
 logger = logging.getLogger(__name__)
 
@@ -396,10 +397,173 @@ def compute_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         similarity = max(0.0, min(1.0, float(similarity)))
         
         return similarity
+
+# ChromaDB Integration Functions
+def save_paper_embedding_to_vectordb(doc_id: str, embedding: np.ndarray, metadata: dict = None) -> bool:
+    """
+    Save document-level embedding to ChromaDB
+    
+    Args:
+        doc_id: str, document identifier
+        embedding: np.ndarray, embedding vector
+        metadata: dict, additional metadata
+    
+    Returns:
+        bool: True if successful
+    """
+    try:
+        vector_db = get_vector_db()
+        
+        # Prepare metadata
+        paper_metadata = metadata or {}
+        if 'embedding_type' not in paper_metadata:
+            paper_metadata['embedding_type'] = 'document'
+        
+        success = vector_db.add_paper_embedding(
+            doc_id=doc_id,
+            embedding=embedding.tolist(),
+            metadata=paper_metadata
+        )
+        
+        if success:
+            logger.info(f"✅ Paper embedding saved to ChromaDB: {doc_id}")
+        else:
+            logger.error(f"❌ Failed to save paper embedding to ChromaDB: {doc_id}")
+        
+        return success
         
     except Exception as e:
-        logger.error(f"Error computing similarity: {e}")
-        return 0.0
+        logger.error(f"Error saving paper embedding to ChromaDB for {doc_id}: {e}")
+        return False
+
+def save_page_embeddings_to_vectordb(doc_id: str, page_embeddings_data: List[tuple]) -> bool:
+    """
+    Save page-level embeddings to ChromaDB
+    
+    Args:
+        doc_id: str, document identifier
+        page_embeddings_data: List of tuples (page_number, page_text, embedding_vector)
+    
+    Returns:
+        bool: True if successful
+    """
+    try:
+        vector_db = get_vector_db()
+        
+        # Prepare page embeddings for ChromaDB
+        page_data = []
+        for page_number, page_text, embedding_vector in page_embeddings_data:
+            page_data.append({
+                'page_number': page_number,
+                'text': page_text,
+                'embedding': embedding_vector.tolist()
+            })
+        
+        success = vector_db.add_page_embeddings(doc_id, page_data)
+        
+        if success:
+            logger.info(f"✅ {len(page_data)} page embeddings saved to ChromaDB: {doc_id}")
+        else:
+            logger.error(f"❌ Failed to save page embeddings to ChromaDB: {doc_id}")
+        
+        return success
+        
+    except Exception as e:
+        logger.error(f"Error saving page embeddings to ChromaDB for {doc_id}: {e}")
+        return False
+
+def get_paper_embedding_from_vectordb(doc_id: str) -> Optional[np.ndarray]:
+    """
+    Get document embedding from ChromaDB
+    
+    Args:
+        doc_id: str, document identifier
+    
+    Returns:
+        np.ndarray: embedding vector or None if not found
+    """
+    try:
+        vector_db = get_vector_db()
+        embedding_list = vector_db.get_paper_embedding(doc_id)
+        
+        if embedding_list:
+            embedding = np.array(embedding_list, dtype=np.float32)
+            logger.info(f"✅ Retrieved paper embedding from ChromaDB: {doc_id}")
+            return embedding
+        else:
+            logger.warning(f"No paper embedding found in ChromaDB: {doc_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error getting paper embedding from ChromaDB for {doc_id}: {e}")
+        return None
+
+def find_similar_papers_vectordb(query_embedding: np.ndarray, n_results: int = 10, 
+                                filters: dict = None) -> List[dict]:
+    """
+    Find similar papers using ChromaDB vector search
+    
+    Args:
+        query_embedding: np.ndarray, query embedding vector
+        n_results: int, number of results to return
+        filters: dict, metadata filters
+    
+    Returns:
+        List[dict]: similar papers with metadata and similarity scores
+    """
+    try:
+        vector_db = get_vector_db()
+        
+        results = vector_db.find_similar_papers(
+            query_embedding.tolist(),
+            n_results=n_results,
+            filters=filters
+        )
+        
+        # Format results
+        similar_papers = []
+        if results['ids'] and len(results['ids'][0]) > 0:
+            for i in range(len(results['ids'][0])):
+                paper_data = {
+                    'doc_id': results['ids'][0][i],
+                    'similarity': 1.0 - results['distances'][0][i],  # Convert distance to similarity
+                    'metadata': results['metadatas'][0][i] if results['metadatas'] else {}
+                }
+                similar_papers.append(paper_data)
+        
+        logger.info(f"✅ Found {len(similar_papers)} similar papers in ChromaDB")
+        return similar_papers
+        
+    except Exception as e:
+        logger.error(f"Error finding similar papers in ChromaDB: {e}")
+        return []
+
+def check_duplicate_by_similarity(embedding: np.ndarray, similarity_threshold: float = 0.95) -> Optional[str]:
+    """
+    Check for duplicate papers using embedding similarity
+    
+    Args:
+        embedding: np.ndarray, query embedding
+        similarity_threshold: float, threshold for considering papers as duplicates
+    
+    Returns:
+        str: existing document ID if duplicate found, None otherwise
+    """
+    try:
+        similar_papers = find_similar_papers_vectordb(embedding, n_results=1)
+        
+        if similar_papers and similar_papers[0]['similarity'] >= similarity_threshold:
+            duplicate_doc_id = similar_papers[0]['doc_id']
+            similarity_score = similar_papers[0]['similarity']
+            
+            logger.warning(f"🔍 Duplicate paper detected: {duplicate_doc_id} (similarity: {similarity_score:.3f})")
+            return duplicate_doc_id
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error checking for duplicates: {e}")
+        return None
 
 def process_text_for_embedding(text: str, max_length: int = 50000) -> str:
     """

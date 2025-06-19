@@ -58,8 +58,8 @@ def main():
     migration_name = get_timestamp()
     print(f"Migration name: {migration_name}")
     
-    # Create migration for all models
-    models_to_migrate = [Paper, ProcessingJob, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser]
+    # Create migration for all models including new duplicate prevention models
+    models_to_migrate = [Paper, ProcessingJob, PageEmbedding, Embedding, Metadata, LayoutAnalysis, AdminUser, FileHash, ContentHash, SampleEmbeddingHash, DuplicateDetectionLog]
     
     try:
         ret = router.create(auto=models_to_migrate, name=migration_name)

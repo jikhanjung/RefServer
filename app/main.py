@@ -27,6 +27,10 @@ from admin import router as admin_router
 from performance_monitor import get_system_performance_stats, get_performance_monitor
 from job_queue import get_queue_status, cancel_queued_job, JobPriority
 from file_security import validate_uploaded_file, get_security_status, FileSecurityError
+from vector_db import initialize_vector_db, get_vector_db
+from embedding import find_similar_papers_vectordb, get_embedding_model
+from duplicate_detector import get_duplicate_detector
+from scheduler import get_background_scheduler, start_background_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -196,16 +200,33 @@ class LayoutInfo(BaseModel):
 async def startup_event():
     """Check services on startup"""
     try:
-        logger.info("Starting RefServer...")
+        logger.info("🚀 Starting RefServer v0.1.10...")
+        
+        # Initialize ChromaDB
+        try:
+            chroma_success = initialize_vector_db()
+            if chroma_success:
+                logger.info("✅ ChromaDB initialized successfully")
+            else:
+                logger.warning("⚠️ ChromaDB initialization failed - vector search may be limited")
+        except Exception as chroma_error:
+            logger.error(f"❌ ChromaDB initialization error: {chroma_error}")
         
         # Check service status
         status = check_all_services()
         logger.info(f"Service status: {status}")
         
-        logger.info("RefServer startup completed")
+        # Start background scheduler
+        try:
+            start_background_scheduler()
+            logger.info("✅ Background scheduler started")
+        except Exception as scheduler_error:
+            logger.error(f"❌ Background scheduler startup failed: {scheduler_error}")
+        
+        logger.info("✅ RefServer v0.1.10 startup completed")
         
     except Exception as e:
-        logger.error(f"Startup failed: {e}")
+        logger.error(f"❌ Startup failed: {e}")
         raise
 
 # Health check endpoint
@@ -960,6 +981,108 @@ async def get_security_system_status():
         logger.error(f"Error getting security status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get security status: {str(e)}")
 
+# Vector search endpoints
+@app.get("/similar/{doc_id}")
+async def get_similar_papers(doc_id: str, limit: int = 10):
+    """
+    Find papers similar to the given document using ChromaDB vector search
+    
+    Args:
+        doc_id: str, document ID to find similar papers for
+        limit: int, maximum number of similar papers to return
+    
+    Returns:
+        List[dict]: similar papers with metadata and similarity scores
+    """
+    try:
+        # Get embedding for the given document
+        embedding = get_embedding_by_id(doc_id)
+        if embedding is None:
+            raise HTTPException(status_code=404, detail=f"No embedding found for document {doc_id}")
+        
+        # Find similar papers using ChromaDB
+        similar_papers = find_similar_papers_vectordb(embedding, n_results=limit)
+        
+        # Filter out the query document itself
+        similar_papers = [paper for paper in similar_papers if paper['doc_id'] != doc_id]
+        
+        return {
+            "query_doc_id": doc_id,
+            "similar_papers": similar_papers[:limit],
+            "total_found": len(similar_papers)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error finding similar papers for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to find similar papers: {str(e)}")
+
+@app.post("/search/vector")
+async def vector_search(
+    query: str,
+    limit: int = 10,
+    filters: Optional[dict] = None
+):
+    """
+    Search papers using text query converted to embedding vector
+    
+    Args:
+        query: str, text query to search for
+        limit: int, maximum number of results to return
+        filters: dict, optional metadata filters
+    
+    Returns:
+        List[dict]: similar papers with metadata and similarity scores
+    """
+    try:
+        if not query or not query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        
+        # Generate embedding for the query text
+        embedding_model = get_embedding_model()
+        query_embedding = embedding_model.encode_text(query.strip())
+        
+        # Search using ChromaDB
+        similar_papers = find_similar_papers_vectordb(query_embedding, n_results=limit, filters=filters)
+        
+        return {
+            "query": query,
+            "similar_papers": similar_papers,
+            "total_found": len(similar_papers),
+            "search_method": "vector_similarity"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in vector search for query '{query}': {e}")
+        raise HTTPException(status_code=500, detail=f"Vector search failed: {str(e)}")
+
+# ChromaDB statistics endpoint
+@app.get("/vector/stats")
+async def get_vector_db_stats():
+    """
+    Get ChromaDB collection statistics and health status
+    
+    Returns:
+        dict: ChromaDB statistics and status
+    """
+    try:
+        vector_db = get_vector_db()
+        stats = vector_db.get_collection_stats()
+        health = vector_db.health_check()
+        
+        return {
+            "chromadb_stats": stats,
+            "health_status": "healthy" if health else "unhealthy",
+            "version": "v0.1.10"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting vector DB stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get vector DB stats: {str(e)}")
+
 # Job cleanup endpoint
 @app.post("/admin/cleanup-jobs")
 async def cleanup_old_jobs_manual(days_old: int = 7):
@@ -993,6 +1116,360 @@ async def cleanup_old_jobs_manual(days_old: int = 7):
     except Exception as e:
         logger.error(f"Error in manual job cleanup: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+# Duplicate Prevention API Endpoints
+
+@app.get("/duplicate-prevention/stats")
+async def get_duplicate_prevention_stats():
+    """Get duplicate prevention system statistics"""
+    try:
+        detector = get_duplicate_detector()
+        stats = detector.get_duplicate_stats()
+        
+        return {
+            "success": True,
+            "statistics": stats,
+            "total_hashes": (
+                stats['file_hashes_count'] + 
+                stats['content_hashes_count'] + 
+                stats['sample_embedding_hashes_count']
+            )
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting duplicate prevention stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+@app.post("/duplicate-prevention/check")
+async def check_duplicate_file(file: UploadFile = File(...)):
+    """Check if uploaded file is a duplicate without processing it"""
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    try:
+        # Validate file
+        validate_uploaded_file(file)
+        
+        # Save to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Check for duplicates
+            detector = get_duplicate_detector()
+            duplicate_doc_id, detection_layer, detection_time = detector.check_all_layers(
+                temp_file_path, file.filename
+            )
+            
+            result = {
+                "success": True,
+                "filename": file.filename,
+                "is_duplicate": duplicate_doc_id is not None,
+                "detection_time": round(detection_time, 3),
+                "detection_layer": detection_layer
+            }
+            
+            if duplicate_doc_id:
+                result["existing_doc_id"] = duplicate_doc_id
+                result["message"] = f"Duplicate detected via {detection_layer}"
+            else:
+                result["message"] = "No duplicates found"
+            
+            return result
+            
+        finally:
+            # Clean up temp file
+            cleanup_temp_file(temp_file_path)
+            
+    except FileSecurityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in duplicate check: {e}")
+        raise HTTPException(status_code=500, detail=f"Duplicate check failed: {str(e)}")
+
+@app.get("/duplicate-prevention/paper/{doc_id}")
+async def get_paper_duplicate_hashes(doc_id: str):
+    """Get all duplicate prevention hashes for a specific paper"""
+    try:
+        from models import Paper, FileHash, ContentHash, SampleEmbeddingHash
+        
+        # Check if paper exists
+        paper = Paper.get_or_none(Paper.doc_id == doc_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        
+        # Get all hash records
+        file_hash = FileHash.get_or_none(FileHash.paper == paper)
+        content_hash = ContentHash.get_or_none(ContentHash.paper == paper)
+        sample_hash = SampleEmbeddingHash.get_or_none(SampleEmbeddingHash.paper == paper)
+        
+        result = {
+            "success": True,
+            "doc_id": doc_id,
+            "hashes": {
+                "file_hash": {
+                    "exists": file_hash is not None,
+                    "md5": file_hash.file_md5 if file_hash else None,
+                    "file_size": file_hash.file_size if file_hash else None,
+                    "created_at": file_hash.created_at.isoformat() if file_hash else None
+                },
+                "content_hash": {
+                    "exists": content_hash is not None,
+                    "hash": content_hash.content_hash if content_hash else None,
+                    "page_count": content_hash.page_count if content_hash else None,
+                    "pdf_title": content_hash.pdf_title if content_hash else None,
+                    "created_at": content_hash.created_at.isoformat() if content_hash else None
+                },
+                "sample_embedding_hash": {
+                    "exists": sample_hash is not None,
+                    "hash": sample_hash.embedding_hash if sample_hash else None,
+                    "strategy": sample_hash.sample_strategy if sample_hash else None,
+                    "vector_dim": sample_hash.vector_dim if sample_hash else None,
+                    "created_at": sample_hash.created_at.isoformat() if sample_hash else None
+                }
+            }
+        }
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting paper hashes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get hashes: {str(e)}")
+
+@app.get("/duplicate-prevention/performance")
+async def get_duplicate_prevention_performance(days: int = 30):
+    """Get detailed performance statistics for duplicate prevention system"""
+    try:
+        if days < 1 or days > 365:
+            raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
+        
+        detector = get_duplicate_detector()
+        performance_stats = detector.get_performance_stats(days)
+        
+        return {
+            "success": True,
+            "performance_statistics": performance_stats,
+            "analysis_note": f"Performance data analyzed for the last {days} days"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting duplicate prevention performance: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get performance stats: {str(e)}")
+
+@app.get("/duplicate-prevention/recent-detections")
+async def get_recent_duplicate_detections(limit: int = 50):
+    """Get recent duplicate detection attempts with details"""
+    try:
+        if limit < 1 or limit > 1000:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+        
+        detector = get_duplicate_detector()
+        recent_detections = detector.get_recent_detections(limit)
+        
+        return {
+            "success": True,
+            "recent_detections": recent_detections,
+            "total_returned": len(recent_detections)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting recent detections: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get recent detections: {str(e)}")
+
+@app.post("/duplicate-prevention/cleanup-logs")
+async def cleanup_duplicate_detection_logs(days_to_keep: int = 90):
+    """Clean up old duplicate detection logs to manage database size"""
+    try:
+        if days_to_keep < 7 or days_to_keep > 730:
+            raise HTTPException(status_code=400, detail="Days to keep must be between 7 and 730")
+        
+        detector = get_duplicate_detector()
+        deleted_count = detector.cleanup_old_detection_logs(days_to_keep)
+        
+        return {
+            "success": True,
+            "deleted_logs": deleted_count,
+            "message": f"Cleaned up logs older than {days_to_keep} days"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up detection logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup logs: {str(e)}")
+
+@app.post("/duplicate-prevention/cleanup-orphaned")
+async def cleanup_orphaned_hashes():
+    """Clean up orphaned hash records that reference deleted papers"""
+    try:
+        detector = get_duplicate_detector()
+        cleanup_stats = detector.cleanup_orphaned_hashes()
+        
+        total_cleaned = sum(cleanup_stats.values())
+        
+        return {
+            "success": True,
+            "cleanup_type": "orphaned_hashes",
+            "total_cleaned": total_cleaned,
+            "details": cleanup_stats,
+            "message": f"Cleaned up {total_cleaned} orphaned hash records"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error cleaning up orphaned hashes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup orphaned hashes: {str(e)}")
+
+@app.post("/duplicate-prevention/cleanup-duplicates")
+async def cleanup_duplicate_hashes():
+    """Clean up duplicate hash records for the same paper"""
+    try:
+        detector = get_duplicate_detector()
+        cleanup_stats = detector.cleanup_duplicate_hashes()
+        
+        total_cleaned = sum(cleanup_stats.values())
+        
+        return {
+            "success": True,
+            "cleanup_type": "duplicate_hashes",
+            "total_cleaned": total_cleaned,
+            "details": cleanup_stats,
+            "message": f"Cleaned up {total_cleaned} duplicate hash records"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error cleaning up duplicate hashes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup duplicate hashes: {str(e)}")
+
+@app.post("/duplicate-prevention/cleanup-unused")
+async def cleanup_unused_hashes(months_threshold: int = 6):
+    """Clean up unused hash records older than specified months"""
+    try:
+        if months_threshold < 1 or months_threshold > 24:
+            raise HTTPException(status_code=400, detail="Months threshold must be between 1 and 24")
+        
+        detector = get_duplicate_detector()
+        cleanup_stats = detector.cleanup_unused_hashes(months_threshold)
+        
+        total_cleaned = sum(cleanup_stats.values())
+        
+        return {
+            "success": True,
+            "cleanup_type": "unused_hashes",
+            "months_threshold": months_threshold,
+            "total_cleaned": total_cleaned,
+            "details": cleanup_stats,
+            "message": f"Cleaned up {total_cleaned} unused hash records older than {months_threshold} months"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up unused hashes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup unused hashes: {str(e)}")
+
+@app.post("/duplicate-prevention/cleanup-all")
+async def cleanup_all_hashes(months_threshold: int = 6, detection_logs_days: int = 90):
+    """Perform comprehensive cleanup of all hash data"""
+    try:
+        if months_threshold < 1 or months_threshold > 24:
+            raise HTTPException(status_code=400, detail="Months threshold must be between 1 and 24")
+        
+        if detection_logs_days < 7 or detection_logs_days > 730:
+            raise HTTPException(status_code=400, detail="Detection logs days must be between 7 and 730")
+        
+        detector = get_duplicate_detector()
+        cleanup_summary = detector.cleanup_all_hashes(months_threshold, detection_logs_days)
+        
+        if cleanup_summary.get('success'):
+            return {
+                "success": True,
+                "cleanup_type": "comprehensive",
+                "parameters": {
+                    "months_threshold": months_threshold,
+                    "detection_logs_days": detection_logs_days
+                },
+                "summary": cleanup_summary,
+                "message": f"Comprehensive cleanup completed: {cleanup_summary['total_records_cleaned']} records cleaned"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Cleanup failed: {cleanup_summary.get('error', 'Unknown error')}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in comprehensive cleanup: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to perform comprehensive cleanup: {str(e)}")
+
+# Background Scheduler API Endpoints
+
+@app.get("/scheduler/status")
+async def get_scheduler_status():
+    """Get background scheduler status and information"""
+    try:
+        scheduler = get_background_scheduler()
+        status = scheduler.get_status()
+        
+        return {
+            "success": True,
+            "scheduler_status": status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting scheduler status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get scheduler status: {str(e)}")
+
+@app.post("/scheduler/force-cleanup")
+async def force_scheduler_cleanup(cleanup_type: str = "comprehensive"):
+    """Force immediate execution of scheduled cleanup"""
+    try:
+        if cleanup_type not in ["daily", "weekly", "comprehensive", "monthly"]:
+            raise HTTPException(status_code=400, detail="Cleanup type must be one of: daily, weekly, comprehensive, monthly")
+        
+        scheduler = get_background_scheduler()
+        result = scheduler.force_cleanup(cleanup_type)
+        
+        if result.get('success'):
+            return {
+                "success": True,
+                "cleanup_type": cleanup_type,
+                "result": result,
+                "message": f"Forced {cleanup_type} cleanup completed successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Forced cleanup failed: {result.get('error', 'Unknown error')}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in forced cleanup: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to execute forced cleanup: {str(e)}")
+
+@app.post("/scheduler/restart")
+async def restart_scheduler():
+    """Restart the background scheduler"""
+    try:
+        scheduler = get_background_scheduler()
+        
+        # Stop and restart scheduler
+        scheduler.stop()
+        scheduler.start()
+        
+        return {
+            "success": True,
+            "message": "Background scheduler restarted successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error restarting scheduler: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to restart scheduler: {str(e)}")
 
 # Utility function for background tasks
 def cleanup_temp_file(file_path: str):

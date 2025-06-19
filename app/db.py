@@ -2,6 +2,7 @@ import os
 import logging
 from peewee_migrate import Router
 from models import *
+from embedding import save_paper_embedding_to_vectordb, save_page_embeddings_to_vectordb, get_paper_embedding_from_vectordb
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ def save_paper(doc_id, filename, file_path, content_id=None):
 
 def save_embedding(doc_id, embedding_vector, model_name='bge-m3'):
     """
-    Save embedding vector for a paper
+    Save embedding vector for a paper to ChromaDB
     
     Args:
         doc_id: str, document ID
@@ -105,35 +106,51 @@ def save_embedding(doc_id, embedding_vector, model_name='bge-m3'):
         model_name: str, name of embedding model used
     
     Returns:
-        Embedding: Created embedding instance
+        bool: True if successful, False otherwise
     """
     try:
+        # Get paper metadata for ChromaDB
         paper = Paper.get(Paper.doc_id == doc_id)
         
-        # Serialize vector
-        vector_blob = serialize_vector(embedding_vector)
-        vector_dim = len(embedding_vector)
+        metadata = {
+            'filename': paper.filename,
+            'content_id': paper.content_id,
+            'model_name': model_name,
+            'created_at': paper.created_at.isoformat() if paper.created_at else None
+        }
         
-        # Delete existing embedding if any
-        Embedding.delete().where(Embedding.paper == paper).execute()
+        # Save to ChromaDB
+        success = save_paper_embedding_to_vectordb(doc_id, embedding_vector, metadata)
         
-        # Create new embedding
-        embedding = Embedding.create(
-            paper=paper,
-            vector_blob=vector_blob,
-            vector_dim=vector_dim,
-            model_name=model_name
-        )
-        
-        logger.info(f"Embedding saved for paper {doc_id}")
-        return embedding
+        if success:
+            # Also keep a record in SQLite for compatibility (without vector blob)
+            try:
+                # Delete existing embedding record if any
+                Embedding.delete().where(Embedding.paper == paper).execute()
+                
+                # Create new embedding record (metadata only)
+                embedding = Embedding.create(
+                    paper=paper,
+                    vector_blob=b'',  # Empty blob - actual vector is in ChromaDB
+                    vector_dim=len(embedding_vector),
+                    model_name=model_name
+                )
+                logger.info(f"✅ Embedding saved to ChromaDB and SQLite metadata for paper {doc_id}")
+            except Exception as sqlite_error:
+                logger.warning(f"Failed to save SQLite metadata for {doc_id}: {sqlite_error}")
+                # ChromaDB save was successful, so continue
+            
+            return True
+        else:
+            logger.error(f"❌ Failed to save embedding to ChromaDB for {doc_id}")
+            return False
         
     except Paper.DoesNotExist:
         logger.error(f"Paper {doc_id} not found for embedding")
-        raise
+        return False
     except Exception as e:
         logger.error(f"Error saving embedding for {doc_id}: {e}")
-        raise
+        return False
 
 def save_metadata(doc_id, title=None, authors=None, journal=None, 
                  year=None, doi=None, abstract=None, keywords=None):
@@ -296,7 +313,7 @@ def get_paper_by_content_id(content_id):
 
 def get_embedding_by_id(doc_id):
     """
-    Get embedding vector by document ID
+    Get embedding vector by document ID from ChromaDB
     
     Args:
         doc_id: str, document ID
@@ -305,10 +322,28 @@ def get_embedding_by_id(doc_id):
         numpy.ndarray: Embedding vector or None if not found
     """
     try:
-        paper = Paper.get(Paper.doc_id == doc_id)
-        embedding = Embedding.get(Embedding.paper == paper)
-        return deserialize_vector(embedding.vector_blob, embedding.vector_dim)
-    except (Paper.DoesNotExist, Embedding.DoesNotExist):
+        # First try to get from ChromaDB
+        embedding = get_paper_embedding_from_vectordb(doc_id)
+        if embedding is not None:
+            return embedding
+        
+        # Fallback to SQLite (for legacy compatibility)
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+            embedding_record = Embedding.get(Embedding.paper == paper)
+            
+            # If SQLite has actual vector data (not empty blob)
+            if embedding_record.vector_blob and len(embedding_record.vector_blob) > 0:
+                logger.info(f"Retrieved embedding from SQLite fallback for {doc_id}")
+                return deserialize_vector(embedding_record.vector_blob, embedding_record.vector_dim)
+        except (Paper.DoesNotExist, Embedding.DoesNotExist):
+            pass
+        
+        logger.warning(f"No embedding found for document {doc_id}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error getting embedding for {doc_id}: {e}")
         return None
 
 def get_metadata_by_id(doc_id):
@@ -391,7 +426,7 @@ def save_page_embedding(doc_id, page_number, page_text, embedding_vector, model_
 
 def save_page_embeddings_batch(doc_id, page_embeddings_data, model_name='bge-m3'):
     """
-    Save multiple page embeddings in batch
+    Save multiple page embeddings in batch to ChromaDB
     
     Args:
         doc_id: str, document ID
@@ -405,29 +440,39 @@ def save_page_embeddings_batch(doc_id, page_embeddings_data, model_name='bge-m3'
         # Get paper instance
         paper = Paper.get(Paper.doc_id == doc_id)
         
-        # Delete all existing page embeddings for this document
-        PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+        # Save to ChromaDB
+        success = save_page_embeddings_to_vectordb(doc_id, page_embeddings_data)
         
-        # Prepare batch data
-        batch_data = []
-        for page_number, page_text, embedding_vector in page_embeddings_data:
-            vector_blob = serialize_vector(embedding_vector)
-            vector_dim = len(embedding_vector)
+        if success:
+            # Also save metadata to SQLite for compatibility
+            try:
+                # Delete all existing page embeddings for this document
+                PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+                
+                # Prepare batch data (metadata only, no vector blobs)
+                batch_data = []
+                for page_number, page_text, embedding_vector in page_embeddings_data:
+                    batch_data.append({
+                        'paper': paper,
+                        'page_number': page_number,
+                        'page_text': page_text,
+                        'vector_blob': b'',  # Empty blob - actual vector is in ChromaDB
+                        'vector_dim': len(embedding_vector),
+                        'model_name': model_name
+                    })
+                
+                # Batch insert metadata
+                PageEmbedding.insert_many(batch_data).execute()
+                
+                logger.info(f"✅ Saved {len(batch_data)} page embeddings to ChromaDB and SQLite metadata for document {doc_id}")
+            except Exception as sqlite_error:
+                logger.warning(f"Failed to save SQLite page metadata for {doc_id}: {sqlite_error}")
+                # ChromaDB save was successful, so continue
             
-            batch_data.append({
-                'paper': paper,
-                'page_number': page_number,
-                'page_text': page_text,
-                'vector_blob': vector_blob,
-                'vector_dim': vector_dim,
-                'model_name': model_name
-            })
-        
-        # Batch insert
-        PageEmbedding.insert_many(batch_data).execute()
-        
-        logger.info(f"Saved {len(batch_data)} page embeddings for document {doc_id}")
-        return True
+            return True
+        else:
+            logger.error(f"❌ Failed to save page embeddings to ChromaDB for {doc_id}")
+            return False
         
     except Exception as e:
         logger.error(f"Error saving page embeddings batch: {e}")

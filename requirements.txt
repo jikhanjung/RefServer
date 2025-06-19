@@ -20,4 +20,6 @@ bcrypt
 python-jose[cryptography]
 python-magic
 PyPDF2
-psutil 
+psutil
+chromadb>=0.4.15
+schedule

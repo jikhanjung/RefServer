@@ -89,6 +89,26 @@
                             </a>
                         </li>
                         
+                        <!-- v0.1.10 Vector DB & Duplicate Prevention -->
+                        <li class="nav-item">
+                            <hr class="dropdown-divider my-2">
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'vector-db' in request.url.path %}active{% endif %}" href="/admin/vector-db">
+                                <i class="fas fa-database me-2"></i>ChromaDB Monitor
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'duplicate-prevention' in request.url.path %}active{% endif %}" href="/admin/duplicate-prevention">
+                                <i class="fas fa-shield-alt me-2"></i>Duplicate Prevention
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'scheduler' in request.url.path %}active{% endif %}" href="/admin/scheduler">
+                                <i class="fas fa-clock me-2"></i>Scheduler
+                            </a>
+                        </li>
+                        
                         {% if user.is_superuser %}
                         <li class="nav-item">
                             <hr class="dropdown-divider my-2">

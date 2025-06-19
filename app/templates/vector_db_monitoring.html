@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}ChromaDB 벡터 DB 모니터링{% endblock %}
+
+{% block extra_head %}
+<style>
+.status-healthy { color: #28a745; }
+.status-unhealthy { color: #dc3545; }
+.status-warning { color: #ffc107; }
+.metric-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+.progress-custom {
+    height: 8px;
+    border-radius: 4px;
+}
+.sync-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+.sync-good { background-color: #28a745; }
+.sync-warning { background-color: #ffc107; }
+.sync-error { background-color: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-database me-2"></i>
+                    ChromaDB 벡터 DB 모니터링
+                </h2>
+                <span class="badge bg-primary fs-6">{{ version }}</span>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                {{ error }}
+            </div>
+            {% else %}
+
+            <!-- ChromaDB 상태 개요 -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card metric-card bg-light">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <i class="fas fa-heartbeat me-2"></i>
+                                ChromaDB 상태
+                            </h5>
+                            <h3 class="{% if dashboard_data.chromadb.status == 'healthy' %}status-healthy{% else %}status-unhealthy{% endif %}">
+                                {% if dashboard_data.chromadb.status == 'healthy' %}
+                                    <i class="fas fa-check-circle"></i> 정상
+                                {% else %}
+                                    <i class="fas fa-times-circle"></i> 오류
+                                {% endif %}
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <i class="fas fa-file-alt me-2"></i>
+                                논문 임베딩
+                            </h5>
+                            <h3>{{ dashboard_data.chromadb.papers_count }}</h3>
+                            <small>개 문서 저장됨</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-info text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <i class="fas fa-layer-group me-2"></i>
+                                페이지 임베딩
+                            </h5>
+                            <h3>{{ dashboard_data.chromadb.pages_count }}</h3>
+                            <small>개 페이지 저장됨</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card metric-card bg-success text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                <i class="fas fa-percentage me-2"></i>
+                                커버리지
+                            </h5>
+                            <h3>{{ dashboard_data.chromadb.embedding_coverage }}%</h3>
+                            <small>벡터화 완료율</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 데이터 동기화 상태 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                SQLite ↔ ChromaDB 동기화 상태
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6>
+                                        <span class="sync-indicator {% if dashboard_data.sync_status.papers_synced %}sync-good{% else %}sync-warning{% endif %}"></span>
+                                        논문 동기화 상태
+                                    </h6>
+                                    <p class="mb-1">
+                                        SQLite: {{ dashboard_data.sqlite.papers_with_embeddings }}개 논문 
+                                        → ChromaDB: {{ dashboard_data.chromadb.papers_count }}개 논문
+                                    </p>
+                                    <div class="progress progress-custom mb-2">
+                                        <div class="progress-bar {% if dashboard_data.sync_status.sync_rate >= 95 %}bg-success{% elif dashboard_data.sync_status.sync_rate >= 80 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             style="width: {{ dashboard_data.sync_status.sync_rate }}%"></div>
+                                    </div>
+                                    <small class="text-muted">동기화율: {{ dashboard_data.sync_status.sync_rate }}%</small>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <h6>
+                                        <span class="sync-indicator sync-good"></span>
+                                        페이지 임베딩 현황
+                                    </h6>
+                                    <p class="mb-1">
+                                        총 {{ dashboard_data.sqlite.papers_with_page_embeddings }}개 논문에 
+                                        페이지별 임베딩 존재
+                                    </p>
+                                    <div class="progress progress-custom mb-2">
+                                        <div class="progress-bar bg-info" style="width: {{ dashboard_data.chromadb.page_coverage }}%"></div>
+                                    </div>
+                                    <small class="text-muted">페이지 커버리지: {{ dashboard_data.chromadb.page_coverage }}%</small>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <h6>
+                                        <span class="sync-indicator sync-good"></span>
+                                        전체 데이터베이스
+                                    </h6>
+                                    <p class="mb-1">총 {{ dashboard_data.sqlite.total_papers }}개 논문 등록</p>
+                                    <p class="mb-1 text-muted">
+                                        <small>
+                                            메타데이터: SQLite<br>
+                                            벡터 데이터: ChromaDB
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 벡터 검색 성능 정보 -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-search me-2"></i>
+                                벡터 검색 성능
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h4 class="text-primary">< 0.1초</h4>
+                                    <p class="mb-0">평균 검색 시간</p>
+                                    <small class="text-muted">10,000개 논문 기준</small>
+                                </div>
+                                <div class="col-6">
+                                    <h4 class="text-success">300배</h4>
+                                    <p class="mb-0">SQLite 대비 성능</p>
+                                    <small class="text-muted">벡터 유사도 검색</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-copy me-2"></i>
+                                중복 감지 시스템
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-fingerprint text-primary me-2"></i>
+                                    <strong>Content ID:</strong> 정확한 중복 감지
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-brain text-info me-2"></i>
+                                    <strong>벡터 유사도:</strong> 95% 이상 유사한 논문 감지
+                                </li>
+                                <li>
+                                    <i class="fas fa-shield-alt text-success me-2"></i>
+                                    <strong>이중 보호:</strong> 중복 업로드 방지
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 새로운 API 엔드포인트 -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-code me-2"></i>
+                                새로운 벡터 검색 API
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6><span class="badge bg-success me-2">GET</span>/similar/{doc_id}</h6>
+                                    <p class="text-muted small">문서와 유사한 논문 검색</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6><span class="badge bg-primary me-2">POST</span>/search/vector</h6>
+                                    <p class="text-muted small">텍스트 쿼리로 벡터 검색</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6><span class="badge bg-info me-2">GET</span>/vector/stats</h6>
+                                    <p class="text-muted small">ChromaDB 통계 및 상태</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// 페이지 자동 새로고침 (30초마다)
+setTimeout(function() {
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}

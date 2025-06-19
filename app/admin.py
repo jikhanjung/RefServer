@@ -13,6 +13,8 @@ import os
 from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
 from auth import AuthManager
 from db import get_paper_by_id, get_page_embeddings_by_id, db
+from vector_db import get_vector_db
+from duplicate_detector import get_duplicate_detector
 
 
 # Initialize router and templates
@@ -532,6 +534,76 @@ async def upload_page(request: Request):
     )
 
 
+# ChromaDB vector database monitoring page
+@router.get("/vector-db", response_class=HTMLResponse)
+async def vector_db_monitoring(request: Request):
+    """ChromaDB vector database monitoring dashboard"""
+    user = require_auth(request)
+    
+    try:
+        # Get ChromaDB statistics
+        vector_db = get_vector_db()
+        chroma_stats = vector_db.get_collection_stats()
+        chroma_health = vector_db.health_check()
+        
+        # Get SQLite paper counts for comparison
+        total_papers = Paper.select().count()
+        papers_with_embeddings = (Paper
+                                .select()
+                                .join(Embedding, on=(Paper.id == Embedding.paper))
+                                .count())
+        papers_with_page_embeddings = (Paper
+                                     .select()
+                                     .join(PageEmbedding, on=(Paper.id == PageEmbedding.paper))
+                                     .distinct()
+                                     .count())
+        
+        # Calculate coverage percentages
+        embedding_coverage = (chroma_stats['papers_count'] / total_papers * 100) if total_papers > 0 else 0
+        page_coverage = (papers_with_page_embeddings / total_papers * 100) if total_papers > 0 else 0
+        
+        # Prepare dashboard data
+        dashboard_data = {
+            'chromadb': {
+                'status': 'healthy' if chroma_health else 'unhealthy',
+                'papers_count': chroma_stats['papers_count'],
+                'pages_count': chroma_stats['pages_count'],
+                'embedding_coverage': round(embedding_coverage, 1),
+                'page_coverage': round(page_coverage, 1)
+            },
+            'sqlite': {
+                'total_papers': total_papers,
+                'papers_with_embeddings': papers_with_embeddings,
+                'papers_with_page_embeddings': papers_with_page_embeddings
+            },
+            'sync_status': {
+                'papers_synced': chroma_stats['papers_count'] == papers_with_embeddings,
+                'sync_rate': round((chroma_stats['papers_count'] / papers_with_embeddings * 100) if papers_with_embeddings > 0 else 0, 1)
+            }
+        }
+        
+        return templates.TemplateResponse(
+            "vector_db_monitoring.html", 
+            {
+                "request": request, 
+                "user": user,
+                "dashboard_data": dashboard_data,
+                "version": "v0.1.10"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "vector_db_monitoring.html", 
+            {
+                "request": request, 
+                "user": user,
+                "error": f"Error loading ChromaDB statistics: {str(e)}",
+                "version": "v0.1.10"
+            }
+        )
+
+
 # Performance monitoring page
 @router.get("/performance", response_class=HTMLResponse)
 async def performance_monitoring(request: Request):
@@ -680,6 +752,136 @@ async def system_monitoring(request: Request):
                 "user": user,
                 "error": f"Failed to load system data: {str(e)}",
                 "page_title": "System Monitoring"
+            }
+        )
+
+# Duplicate Prevention monitoring page
+@router.get("/duplicate-prevention", response_class=HTMLResponse)
+async def duplicate_prevention_monitoring(request: Request):
+    """Duplicate prevention system monitoring dashboard"""
+    user = require_auth(request)
+    
+    try:
+        # Get duplicate prevention statistics
+        detector = get_duplicate_detector()
+        dup_stats = detector.get_duplicate_stats()
+        
+        # Get performance statistics (last 30 days)
+        performance_stats = detector.get_performance_stats(30)
+        
+        # Get recent detection attempts
+        recent_detections = detector.get_recent_detections(20)
+        
+        # Get some sample hash records for display
+        from models import FileHash, ContentHash, SampleEmbeddingHash, Paper
+        
+        # Recent file hashes
+        recent_file_hashes = (FileHash
+                            .select(FileHash, Paper.filename)
+                            .join(Paper)
+                            .order_by(FileHash.created_at.desc())
+                            .limit(10))
+        
+        # Recent content hashes  
+        recent_content_hashes = (ContentHash
+                               .select(ContentHash, Paper.filename)
+                               .join(Paper)
+                               .order_by(ContentHash.created_at.desc())
+                               .limit(10))
+        
+        # Recent sample embedding hashes
+        recent_sample_hashes = (SampleEmbeddingHash
+                              .select(SampleEmbeddingHash, Paper.filename)
+                              .join(Paper)
+                              .order_by(SampleEmbeddingHash.created_at.desc())
+                              .limit(10))
+        
+        # Calculate efficiency metrics
+        total_papers = Paper.select().count()
+        hash_coverage = {
+            'file_hash_coverage': (dup_stats['file_hashes_count'] / total_papers * 100) if total_papers > 0 else 0,
+            'content_hash_coverage': (dup_stats['content_hashes_count'] / total_papers * 100) if total_papers > 0 else 0,
+            'sample_hash_coverage': (dup_stats['sample_embedding_hashes_count'] / total_papers * 100) if total_papers > 0 else 0
+        }
+        
+        dashboard_data = {
+            'statistics': dup_stats,
+            'performance': performance_stats,
+            'recent_detections': recent_detections,
+            'coverage': hash_coverage,
+            'total_papers': total_papers,
+            'recent_hashes': {
+                'file_hashes': list(recent_file_hashes),
+                'content_hashes': list(recent_content_hashes),
+                'sample_hashes': list(recent_sample_hashes)
+            }
+        }
+        
+        return templates.TemplateResponse(
+            "duplicate_prevention_monitoring.html",
+            {
+                "request": request,
+                "user": user,
+                "dashboard_data": dashboard_data,
+                "version": "v0.1.10"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "duplicate_prevention_monitoring.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading duplicate prevention statistics: {str(e)}",
+                "version": "v0.1.10"
+            }
+        )
+
+# Scheduler management page
+@router.get("/scheduler", response_class=HTMLResponse)
+async def scheduler_management(request: Request):
+    """Background scheduler management dashboard"""
+    user = require_auth(request)
+    
+    try:
+        from scheduler import get_background_scheduler
+        
+        # Get scheduler status
+        scheduler = get_background_scheduler()
+        scheduler_status = scheduler.get_status()
+        
+        # Get recent cleanup statistics if available
+        last_cleanup = scheduler_status.get('last_cleanup')
+        
+        dashboard_data = {
+            'scheduler_status': scheduler_status,
+            'last_cleanup': last_cleanup,
+            'cleanup_types': [
+                {'id': 'daily', 'name': 'Daily Cleanup', 'description': 'Light maintenance - orphaned hashes and old logs'},
+                {'id': 'weekly', 'name': 'Weekly Comprehensive', 'description': 'Full cleanup including duplicates and unused hashes'},
+                {'id': 'monthly', 'name': 'Monthly Deep Clean', 'description': 'Aggressive cleanup with extended thresholds'}
+            ]
+        }
+        
+        return templates.TemplateResponse(
+            "scheduler_management.html",
+            {
+                "request": request,
+                "user": user,
+                "dashboard_data": dashboard_data,
+                "version": "v0.1.10"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "scheduler_management.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading scheduler management: {str(e)}",
+                "version": "v0.1.10"
             }
         )
 
