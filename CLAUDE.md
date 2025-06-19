@@ -2,11 +2,13 @@
 
 ## 🎯 목적
 RefServer는 과학 논문 PDF 파일을 입력받아 다음의 작업을 자동으로 수행하는 통합 처리 시스템입니다:
-- OCR 및 품질 평가 (LLaVA via Ollama)
+- **하이브리드 언어 감지 OCR** (텍스트 → LLaVA → 다중 OCR 샘플링)
+- OCR 품질 평가 (LLaVA via Ollama)
 - 텍스트 추출 및 임베딩 생성 (bge-m3)
 - 서지정보 추출 (GPT 또는 llama 기반)
 - PDF 레이아웃 분석 (via Huridocs)
-- SQLite 기반 저장 및 API 제공
+- **ChromaDB 벡터 데이터베이스** 및 **4층 중복 방지**
+- SQLite + ChromaDB 하이브리드 저장 및 API 제공
 
 ---
 
@@ -19,7 +21,7 @@ RefServer/
 ├── app/
 │   ├── main.py             # FastAPI 진입점
 │   ├── pipeline.py         # 전체 처리 흐름
-│   ├── ocr.py              # ocrmypdf 및 이미지 추출
+│   ├── ocr.py              # 하이브리드 언어감지 OCR (텍스트/LLaVA/다중OCR)
 │   ├── ocr_quality.py      # llava를 이용한 OCR 품질 판단
 │   ├── embedding.py        # bge-m3 임베딩 처리 (페이지별)
 │   ├── metadata.py         # LLM을 이용한 서지정보 추출
@@ -285,6 +287,44 @@ python test_api.py --pdf /path/to/paper.pdf
 ---
 
 ## 📅 Changelog
+
+- **2025-06-19**
+    - **🔍 하이브리드 언어 감지 OCR 시스템 구현 (v0.1.11)**
+        - **기존 문제 해결**: PDF에 텍스트 레이어가 없을 경우 항상 영어로 OCR → 한국어/일본어 등 비영어 문서에서 OCR 품질 저하
+        - **3단계 하이브리드 감지**:
+            - Level 1: 텍스트 기반 감지 (기존 텍스트가 50자 이상일 경우)
+            - Level 2: LLaVA 시각적 언어 감지 (GPU 환경에서 첫 페이지 이미지 분석)
+            - Level 3: 다중 언어 OCR 샘플링 (7개 언어로 샘플 OCR 후 최적 선택)
+        
+        - **다중 언어 OCR 샘플링 시스템**:
+            - 첫 페이지 상단 30% 영역 추출 (제목/헤더 위치)
+            - 우선순위 언어: eng, kor, jpn, chi_sim, fra, deu, spa
+            - 복합 점수 계산: OCR 신뢰도 + 텍스트 길이 + 언어 매칭 보너스
+            - pytesseract로 직접 Tesseract 호출하여 신뢰도 측정
+        
+        - **LLaVA 시각적 언어 감지**:
+            - GPU 환경에서 첫 페이지 이미지를 LLaVA로 분석
+            - 문자 모양과 문자 체계로 언어 식별
+            - 스캔된 문서나 이미지 기반 PDF에 최적화
+            - Ollama API 연동으로 자동 처리
+        
+        - **성능 최적화**:
+            - 샘플 영역 추출로 처리 시간 단축
+            - 200 DPI 고해상도로 OCR 품질 향상
+            - 임시 파일 자동 정리 및 메모리 최적화
+            - 언어별 우선순위로 효율적 검사
+        
+        - **통합 및 테스트**:
+            - process_pdf_with_ocr()에 detect_language_hybrid() 통합
+            - language_detection_method 필드 추가로 사용된 방법 추적
+            - test_ocr_language_detection.py: 종합 테스트 스크립트
+            - 5개 언어(영어/한국어/일본어/중국어/프랑스어) 테스트 케이스
+
+    **🎯 RefServer v0.1.11: 세계 최고 수준의 다국어 OCR 언어 감지!**
+    - 텍스트 레이어 없는 PDF → 스마트 언어 감지 → 최적 OCR 품질
+    - 한국어/일본어/중국어 학술논문 OCR 정확도 대폭 향상
+    - GPU 환경: LLaVA 시각 분석, CPU 환경: 다중 OCR 샘플링
+    - 완전 자동화된 언어 감지로 사용자 개입 없이 최적 처리
 
 - **2025-06-17**
     - **🏗️ 프로젝트 초기 설정**

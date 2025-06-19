@@ -3,6 +3,7 @@ uvicorn
 python-multipart
 ocrmypdf
 tesseract
+pytesseract
 pymupdf
 pdf2image
 numpy
