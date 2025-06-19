@@ -153,6 +153,14 @@ class HuridocsLayoutAnalyzer:
                 # Process elements (text blocks, images, etc.)
                 elements = page_data.get('elements', [])
                 
+                # Handle case where elements might be a dict instead of list
+                if isinstance(elements, dict):
+                    # Convert dict to list of values if needed
+                    elements = list(elements.values()) if elements else []
+                elif not isinstance(elements, list):
+                    # If it's neither dict nor list, treat as empty
+                    elements = []
+                
                 for element in elements:
                     element_info = {
                         'type': element.get('type', 'unknown'),

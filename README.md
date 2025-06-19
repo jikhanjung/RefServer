@@ -1,4 +1,4 @@
-# RefServer v0.1.7
+# RefServer v0.1.8
 
 🚀 **과학 논문 PDF를 위한 완전한 AI 처리 파이프라인**
 
@@ -6,21 +6,24 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임
 
 ## 🎉 **구현 완료 상태**
 - ✅ **11개 핵심 모듈** 완전 구현 (Jinja2 관리자 인터페이스)
-- ✅ **27개 API 엔드포인트** 제공 (비동기 처리 + 관리자 인터페이스 포함)
+- ✅ **28개 API 엔드포인트** 제공 (비동기 처리 + 관리자 인터페이스 + Job 정리)
 - ✅ **비동기 PDF 처리 시스템** 구현 완료 (v0.1.6)
 - ✅ **환경 적응형 테스트 시스템** 구현 완료 (v0.1.7)
-- ✅ **실시간 처리 상태 추적** (job 기반 진행률 모니터링)
+- ✅ **시스템 안정성 대폭 개선** 구현 완료 (v0.1.8)
+- ✅ **실시간 처리 상태 추적** (job 기반 정확한 진행률 모니터링)
 - ✅ **페이지별 임베딩 시스템** 구현 완료
 - ✅ **고도화된 관리자 인터페이스** (패스워드 변경, 업로드 폼, 페이지 임베딩 관리)
 - ✅ **GPU/CPU 적응형 배포** (자동 환경 감지 및 최적화)
-- ✅ **경량화된 의존성** (aioredis 충돌 해결)
+- ✅ **중복 컨텐츠 스마트 처리** (UNIQUE constraint 에러 해결)
+- ✅ **자동 Job 정리 시스템** (백그라운드 스케줄러)
+- ✅ **견고한 에러 처리** (Layout analysis, 단계별 추적 에러 해결)
 - ✅ **Bootstrap 반응형 UI** 관리자 패널
 - ✅ **보안 강화** (JWT 세션, bcrypt 해싱)
 - ✅ **사용자 친화적 업로드** 인터페이스 (비동기 처리 + 실시간 진행률)
 - ✅ **견고한 Fallback 시스템** (서비스 장애 시 대체 처리)
 - ✅ **Docker 배포** 준비 완료
-- ✅ **종합 테스트** 시스템 포함 (동기/비동기 API + 환경별 적응형 테스트)
-- ✅ **프로덕션 사용** 가능
+- ✅ **100% 테스트 성공률** (CPU/GPU 환경 모두 완벽 동작)
+- ✅ **프로덕션 안정성** 완료
 
 ## ✨ 주요 기능
 
@@ -36,6 +39,9 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임
 - **📊 페이지 임베딩 관리**: 페이지별 벡터 조회 + 텍스트 뷰어 + 통계 대시보드
 - **🖥️ 적응형 배포**: GPU/CPU 환경 자동 감지 + 서비스별 조건부 활성화
 - **🔧 견고한 Fallback**: 외부 서비스 장애 시 rule-based 대체 처리
+- **🔄 자동 Job 정리**: 24시간 주기 백그라운드 정리 + 수동 정리 API
+- **🛡️ 중복 컨텐츠 처리**: 동일 컨텐츠 감지 시 기존 결과 재사용
+- **📊 정확한 진행률 추적**: 단계별 완료/실패 상태 상세 기록
 
 ## 🎯 API 엔드포인트
 
@@ -75,6 +81,7 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 OCR, 품질 평가, 임
 - **`/admin/page-embeddings`** - 페이지 임베딩 목록 및 통계
 - **`/admin/page-embeddings/{id}`** - 페이지별 상세 정보 및 텍스트 뷰어
 - **`/admin/logout`** - 관리자 로그아웃
+- **`POST /admin/cleanup-jobs`** - 오래된 Job 수동 정리 (NEW in v0.1.8)
 
 ## 🚀 빠른 시작
 
@@ -144,35 +151,79 @@ python test_api.py
 python test_api.py --pdf /path/to/paper.pdf
 ```
 
-### 4. 관리자 인터페이스 접속
+### 4. 관리자 계정 설정
+```bash
+# 기본 관리자 계정 생성 (admin/admin123)
+docker exec -it refserver python manage_admin.py ensure-default
+
+# 새 관리자 계정 생성
+docker exec -it refserver python manage_admin.py create myadmin --email admin@example.com --superuser
+
+# 관리자 계정 목록 확인
+docker exec -it refserver python manage_admin.py list
+
+# 비밀번호 변경
+docker exec -it refserver python manage_admin.py passwd myadmin
+
+# 계정 비활성화
+docker exec -it refserver python manage_admin.py deactivate oldadmin
+```
+
+### 5. 관리자 인터페이스 접속
 - 관리자 페이지: http://localhost:8060/admin
 - 기본 계정: admin / admin123 (첫 로그인 후 변경 권장)
 - **새로운 기능**: Jinja2 기반 경량화된 인터페이스 (FastAPI Admin 대체)
 
-### 5. API 문서 확인
+### 6. API 문서 확인
 - Swagger UI: http://localhost:8060/docs
 - ReDoc: http://localhost:8060/redoc
 
-### 4. 테스트 결과 (v0.1.6)
+### 7. 테스트 결과 (v0.1.8)
 ```
-📊 Test Summary
-   Total tests: 14
-   Passed: 14 ✅
+📊 Test Summary (CPU 환경)
+   Total tests: 36
+   Passed: 36 ✅
    Failed: 0 ❌
    Success rate: 100.0%
-   Total time: ~3-4분 (CPU 환경)
+   Total time: ~45초
+
+📊 Test Summary (GPU 환경)  
+   Total tests: 31
+   Passed: 31 ✅
+   Failed: 0 ❌
+   Success rate: 100.0%
+   Total time: ~47초
 ```
 
 **검증 완료된 기능:**
 - ✅ PDF 업로드 및 전체 파이프라인 처리
 - ✅ OCR + 10개 언어 자동 감지
 - ✅ BGE-M3 임베딩 생성 (1024차원)
-- ✅ Huridocs 레이아웃 분석 (포트 수정 완료)
+- ✅ Huridocs 레이아웃 분석 (타입 에러 수정 완료)
 - ✅ LLM 기반 메타데이터 추출
-- ✅ 중복 컨텐츠 감지 시스템
+- ✅ 중복 컨텐츠 스마트 처리 (UNIQUE constraint 해결)
+- ✅ 정확한 단계별 진행률 추적
+- ✅ 자동 Job 정리 시스템
 - ✅ 모든 API 엔드포인트 응답
 
-## 🔄 비동기 처리 워크플로우 (v0.1.6) + 환경 적응형 테스트 (v0.1.7)
+## 🔄 비동기 처리 워크플로우 (v0.1.6) + 시스템 안정성 개선 (v0.1.8)
+
+### v0.1.8 주요 개선사항
+
+#### 🛡️ 시스템 안정성 대폭 향상
+- **UNIQUE constraint 에러 해결**: 중복 컨텐츠 감지 시 기존 결과 재사용으로 완전 해결
+- **Layout Analysis 안정화**: 'list' object 타입 에러 수정으로 GPU 환경에서 안정적 동작
+- **정확한 진행률 추적**: steps_completed/failed가 0으로 표시되던 문제 완전 해결
+
+#### 🔄 자동화된 시스템 관리
+- **24시간 주기 자동 정리**: 백그라운드 스케줄러로 오래된 Job 자동 삭제
+- **수동 정리 API**: `POST /admin/cleanup-jobs` 엔드포인트로 즉시 정리 가능
+- **프로덕션 안정성**: 장기간 운영을 위한 자동화된 유지보수
+
+#### 📊 100% 테스트 성공률 달성
+- **CPU 환경**: 36/36 테스트 통과 (100%)
+- **GPU 환경**: 31/31 테스트 통과 (100%)
+- **주요 에러 완전 제거**: 모든 알려진 에러들 해결
 
 ### 기존 동기 처리 vs 새로운 비동기 처리
 
@@ -353,6 +404,76 @@ HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Huridocs 서비스 (내부 �
 - **동시 처리**: FastAPI 비동기 지원
 - **확장성**: 각 처리 단계 독립적 실행 가능
 - **내결함성**: 일부 서비스 장애 시에도 기본 처리 지속
+
+## 🔧 관리자 계정 관리 (manage_admin.py)
+
+RefServer는 Docker 환경과 로컬 환경을 자동으로 감지하여 적절한 데이터베이스에 연결하는 관리자 계정 관리 도구를 제공합니다.
+
+### 사용법
+```bash
+# Docker 환경에서 사용 (권장)
+docker exec -it refserver python manage_admin.py [COMMAND] [OPTIONS]
+
+# 로컬 환경에서 사용
+python manage_admin.py [COMMAND] [OPTIONS]
+```
+
+### 명령어
+
+#### 1. 기본 관리자 계정 생성
+```bash
+# admin/admin123 계정 자동 생성
+docker exec -it refserver python manage_admin.py ensure-default
+```
+
+#### 2. 새 관리자 계정 생성
+```bash
+# 기본 계정 생성 (비밀번호 프롬프트)
+docker exec -it refserver python manage_admin.py create username --email user@example.com
+
+# 슈퍼유저 권한으로 생성
+docker exec -it refserver python manage_admin.py create admin2 --email admin2@example.com --superuser
+
+# 전체 정보 포함 생성
+docker exec -it refserver python manage_admin.py create fulluser --email full@example.com --full-name "Full Name" --superuser
+```
+
+#### 3. 계정 목록 조회
+```bash
+docker exec -it refserver python manage_admin.py list
+```
+
+**출력 예시:**
+```
+Username        Email                     Full Name            Active   Super    Last Login          
+----------------------------------------------------------------------------------------------------
+admin           admin@refserver.local     Admin User           Yes      Yes      2025-06-19 10:30
+testuser        test@example.com          Test User            Yes      No       Never               
+olduser         old@example.com           Old User             No       No       2025-06-18 15:20
+```
+
+#### 4. 비밀번호 변경
+```bash
+# 대화형 비밀번호 변경
+docker exec -it refserver python manage_admin.py passwd username
+```
+
+#### 5. 계정 비활성화
+```bash
+# 계정 비활성화 (확인 프롬프트 포함)
+docker exec -it refserver python manage_admin.py deactivate username
+```
+
+### 환경 자동 감지
+- **Docker 환경**: `/data/refserver.db` 사용
+- **로컬 환경**: `./data/refserver.db` 사용
+- 자동으로 필요한 테이블 생성 및 초기화
+
+### 보안 기능
+- **bcrypt 해싱**: 모든 비밀번호 안전하게 저장
+- **대화형 입력**: 비밀번호 노출 방지
+- **확인 프롬프트**: 중요한 작업 시 재확인
+- **슈퍼유저 권한**: 관리자 레벨 분리
 
 ## 🧪 API 테스트 시스템
 

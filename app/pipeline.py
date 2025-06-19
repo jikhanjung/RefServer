@@ -206,24 +206,41 @@ class PDFProcessingPipeline:
                                     
                                     # Check for duplicates
                                     existing_paper = get_paper_by_content_id(content_id)
-                                    if existing_paper:
-                                        logger.warning(f"Similar paper found: {existing_paper.doc_id}")
+                                    if existing_paper and existing_paper.doc_id != doc_id:
+                                        # Duplicate content detected - reuse existing paper data
+                                        logger.warning(f"Duplicate content detected! Reusing existing paper: {existing_paper.doc_id}")
                                         result['warnings'].append(f"Similar content detected (ID: {existing_paper.doc_id})")
-                                    
-                                    # Save document-level embedding
-                                    save_embedding(doc_id, document_embedding)
-                                    
-                                    # Update paper with content_id
-                                    paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
-                                    
-                                    result['data']['embedding'] = {
-                                        'dimension': len(document_embedding),
-                                        'content_id': content_id,
-                                        'page_count': page_count,
-                                        'pages_with_embeddings': len(page_embeddings_data)
-                                    }
-                                    result['steps_completed'].append('embedding')
-                                    logger.info(f"Document embedding generated from {page_count} pages: {len(document_embedding)} dimensions")
+                                        
+                                        # Return existing paper's doc_id for consistency
+                                        result['doc_id'] = existing_paper.doc_id
+                                        result['data']['duplicate_of'] = existing_paper.doc_id
+                                        result['data']['embedding'] = {
+                                            'dimension': len(document_embedding),
+                                            'content_id': content_id,
+                                            'page_count': page_count,
+                                            'pages_with_embeddings': len(page_embeddings_data),
+                                            'reused_existing': True
+                                        }
+                                        
+                                        # Skip saving embedding and updating paper to avoid constraint error
+                                        result['steps_completed'].append('embedding')
+                                        logger.info(f"Reused existing document embedding: {existing_paper.doc_id}")
+                                    else:
+                                        # No duplicate found or same document - proceed normally
+                                        # Save document-level embedding
+                                        save_embedding(doc_id, document_embedding)
+                                        
+                                        # Update paper with content_id (safe since no duplicate exists)
+                                        paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
+                                        
+                                        result['data']['embedding'] = {
+                                            'dimension': len(document_embedding),
+                                            'content_id': content_id,
+                                            'page_count': page_count,
+                                            'pages_with_embeddings': len(page_embeddings_data)
+                                        }
+                                        result['steps_completed'].append('embedding')
+                                        logger.info(f"Document embedding generated from {page_count} pages: {len(document_embedding)} dimensions")
                                 else:
                                     raise Exception("Failed to generate valid document embedding from pages")
                             else:

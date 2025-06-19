@@ -121,6 +121,17 @@ class BackgroundProcessor:
                 job.progress_percentage = 100
                 job.set_result_summary(result)
                 
+                # Update steps completed/failed based on pipeline result
+                if 'steps_completed' in result:
+                    for step in result['steps_completed']:
+                        job.add_completed_step(step)
+                
+                if 'steps_failed' in result:
+                    for step in result['steps_failed']:
+                        # Extract error message from warnings if available
+                        error_msg = next((w for w in result.get('warnings', []) if step in w.lower()), f"{step} failed")
+                        job.add_failed_step(step, error_msg)
+                
                 # Link to created paper if available
                 if result.get('doc_id'):
                     try:
@@ -130,7 +141,7 @@ class BackgroundProcessor:
                         pass
                 
                 job.save()
-                logger.info(f"Job {job_id} completed successfully")
+                logger.info(f"Job {job_id} completed successfully with {len(result.get('steps_completed', []))} steps completed and {len(result.get('steps_failed', []))} steps failed")
                 
             else:
                 # Processing failed

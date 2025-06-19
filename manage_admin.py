@@ -18,19 +18,25 @@ from models import db, AdminUser
 def init_db():
     """Initialize database connection"""
     try:
-        # Override database path for local development (same as migrate.py)
-        local_data_dir = Path(__file__).parent / 'data'
-        if not local_data_dir.exists():
-            local_data_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Created data directory: {local_data_dir}")
+        # Check if running in Docker (use /data) or locally (use ./data)
+        if Path('/data').exists():
+            # Docker environment
+            data_dir = Path('/data')
+            db_path = data_dir / 'refserver.db'
+            print(f"Docker environment detected. Using: {db_path}")
+        else:
+            # Local development environment
+            data_dir = Path(__file__).parent / 'data'
+            if not data_dir.exists():
+                data_dir.mkdir(parents=True, exist_ok=True)
+                print(f"Created data directory: {data_dir}")
+            db_path = data_dir / 'refserver.db'
+            print(f"Local environment detected. Using: {db_path}")
         
-        # Use local database path instead of /data
-        local_db_path = local_data_dir / 'refserver.db'
-        
-        print(f"Database path: {local_db_path}")
+        print(f"Database path: {db_path}")
         
         # Override database path temporarily
-        db.init(str(local_db_path))
+        db.init(str(db_path))
         
         if db.is_closed():
             db.connect()

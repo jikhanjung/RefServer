@@ -2,6 +2,8 @@ import os
 import logging
 import tempfile
 import shutil
+import asyncio
+import threading
 from typing import Dict, List, Optional
 from pathlib import Path
 
@@ -38,6 +40,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Global cleanup task control
+_cleanup_task = None
+_cleanup_stop_event = None
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -46,6 +52,60 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Background job cleanup scheduler
+async def cleanup_jobs_periodically():
+    """Periodically clean up old processing jobs"""
+    global _cleanup_stop_event
+    
+    logger.info("Starting background job cleanup scheduler")
+    
+    while not _cleanup_stop_event.is_set():
+        try:
+            # Clean up jobs older than 7 days every 24 hours
+            processor = get_background_processor()
+            processor.cleanup_old_jobs(days_old=7)
+            
+            # Wait 24 hours (86400 seconds) or until stop event
+            await asyncio.sleep(86400)  # 24 hours
+            
+        except Exception as e:
+            logger.error(f"Error in background cleanup: {e}")
+            # Wait 1 hour before retrying on error
+            await asyncio.sleep(3600)
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background tasks on startup"""
+    global _cleanup_task, _cleanup_stop_event
+    
+    logger.info("🚀 RefServer starting up...")
+    
+    # Initialize cleanup task
+    _cleanup_stop_event = asyncio.Event()
+    _cleanup_task = asyncio.create_task(cleanup_jobs_periodically())
+    
+    logger.info("✅ Background job cleanup scheduler started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up background tasks on shutdown"""
+    global _cleanup_task, _cleanup_stop_event
+    
+    logger.info("🛑 RefServer shutting down...")
+    
+    # Stop cleanup task
+    if _cleanup_stop_event:
+        _cleanup_stop_event.set()
+    
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
+    
+    logger.info("✅ Background tasks stopped")
 
 # Pydantic models for API responses
 class ProcessingResult(BaseModel):
@@ -608,6 +668,40 @@ async def get_statistics():
     except Exception as e:
         logger.error(f"Error getting statistics: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
+
+# Job cleanup endpoint
+@app.post("/admin/cleanup-jobs")
+async def cleanup_old_jobs_manual(days_old: int = 7):
+    """Manually trigger cleanup of old processing jobs"""
+    try:
+        processor = get_background_processor()
+        
+        # Get count before cleanup
+        from models import ProcessingJob
+        import datetime
+        cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days_old)
+        
+        old_jobs_count = (ProcessingJob
+                         .select()
+                         .where(
+                             (ProcessingJob.status.in_(['completed', 'failed'])) &
+                             (ProcessingJob.created_at < cutoff_date)
+                         )
+                         .count())
+        
+        # Perform cleanup
+        processor.cleanup_old_jobs(days_old)
+        
+        return {
+            "success": True,
+            "days_old": days_old,
+            "jobs_cleaned": old_jobs_count,
+            "message": f"Cleaned up {old_jobs_count} jobs older than {days_old} days"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in manual job cleanup: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
 # Utility function for background tasks
 def cleanup_temp_file(file_path: str):
