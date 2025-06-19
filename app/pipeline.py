@@ -19,6 +19,7 @@ from db import (
     save_page_embeddings_batch
 )
 from models import compute_content_id
+from version import get_version
 
 logger = logging.getLogger(__name__)
 
@@ -386,12 +387,25 @@ class PDFProcessingPipeline:
         """
         logger.info("Checking service status...")
         
+        # Determine deployment mode
+        quality_available = is_quality_assessment_available()
+        layout_available = is_layout_service_available()
+        
+        if quality_available and layout_available:
+            deployment_mode = "GPU"
+        elif not quality_available and not layout_available:
+            deployment_mode = "CPU"
+        else:
+            deployment_mode = "Mixed"
+        
         status = {
             'database': False,
             'quality_assessment': False,
             'layout_analysis': False,
             'metadata_extraction': False,
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'version': get_version(),
+            'deployment_mode': deployment_mode
         }
         
         try:
@@ -536,7 +550,9 @@ def check_all_services() -> Dict:
             'layout_analysis': False,
             'metadata_extraction': False,
             'error': str(e),
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'version': get_version(),
+            'deployment_mode': "Error"
         }
 
 

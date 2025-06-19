@@ -532,6 +532,157 @@ async def upload_page(request: Request):
     )
 
 
+# Performance monitoring page
+@router.get("/performance", response_class=HTMLResponse)
+async def performance_monitoring(request: Request):
+    """Performance monitoring dashboard"""
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    
+    try:
+        # Import here to avoid circular imports
+        from performance_monitor import get_system_performance_stats
+        from job_queue import get_queue_status
+        
+        # Get performance statistics
+        perf_stats = get_system_performance_stats()
+        queue_status = get_queue_status()
+        
+        return templates.TemplateResponse(
+            "admin/performance.html",
+            {
+                "request": request,
+                "user": user,
+                "performance_stats": perf_stats,
+                "queue_status": queue_status,
+                "page_title": "Performance Monitoring"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "admin/performance.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Failed to load performance data: {str(e)}",
+                "page_title": "Performance Monitoring"
+            }
+        )
+
+# Queue management page
+@router.get("/queue", response_class=HTMLResponse)
+async def queue_management(request: Request):
+    """Job queue management dashboard"""
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    
+    try:
+        from job_queue import get_queue_status
+        from models import ProcessingJob
+        
+        # Get queue status
+        queue_status = get_queue_status()
+        
+        # Get recent processing jobs
+        recent_jobs = (ProcessingJob
+                      .select()
+                      .order_by(ProcessingJob.created_at.desc())
+                      .limit(20))
+        
+        return templates.TemplateResponse(
+            "admin/queue.html",
+            {
+                "request": request,
+                "user": user,
+                "queue_status": queue_status,
+                "recent_jobs": recent_jobs,
+                "page_title": "Job Queue Management"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "admin/queue.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Failed to load queue data: {str(e)}",
+                "page_title": "Job Queue Management"
+            }
+        )
+
+# System monitoring page
+@router.get("/system", response_class=HTMLResponse)
+async def system_monitoring(request: Request):
+    """System resource monitoring dashboard"""
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    
+    try:
+        import psutil
+        import time
+        from performance_monitor import get_performance_monitor
+        
+        # Get current system metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Load average (Unix only)
+        load_avg = None
+        if hasattr(os, 'getloadavg'):
+            load_avg = list(os.getloadavg())
+        
+        # Get performance monitor for historical data
+        monitor = get_performance_monitor()
+        recent_metrics = list(monitor.system_metrics)[-100:]  # Last 100 data points
+        
+        system_metrics = {
+            "timestamp": time.time(),
+            "cpu": {
+                "current_percent": cpu_percent,
+                "load_average": load_avg
+            },
+            "memory": {
+                "total_gb": memory.total / 1024 / 1024 / 1024,
+                "used_gb": memory.used / 1024 / 1024 / 1024,
+                "available_gb": memory.available / 1024 / 1024 / 1024,
+                "percent": memory.percent
+            },
+            "disk": {
+                "total_gb": disk.total / 1024 / 1024 / 1024,
+                "used_gb": disk.used / 1024 / 1024 / 1024,
+                "free_gb": disk.free / 1024 / 1024 / 1024,
+                "percent": disk.percent
+            },
+            "historical": recent_metrics
+        }
+        
+        return templates.TemplateResponse(
+            "admin/system.html",
+            {
+                "request": request,
+                "user": user,
+                "system_metrics": system_metrics,
+                "page_title": "System Monitoring"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "admin/system.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Failed to load system data: {str(e)}",
+                "page_title": "System Monitoring"
+            }
+        )
+
 # Root redirect
 @router.get("/", response_class=HTMLResponse)
 async def admin_root(request: Request):

@@ -17,4 +17,7 @@ sentence-transformers
 jinja2
 aiofiles
 bcrypt
-python-jose[cryptography] 
+python-jose[cryptography]
+python-magic
+PyPDF2
+psutil 

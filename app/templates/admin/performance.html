@@ -1,0 +1,335 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Performance Monitoring{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-excellent { background-color: #d4edda; color: #155724; }
+.status-good { background-color: #d1ecf1; color: #0c5460; }
+.status-warning { background-color: #fff3cd; color: #856404; }
+.status-critical { background-color: #f8d7da; color: #721c24; }
+
+.progress-bar {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    height: 1rem;
+    overflow: hidden;
+}
+
+.progress-fill {
+    background-color: #007bff;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.refresh-btn {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.refresh-btn:hover {
+    background: #0056b3;
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Performance Monitoring</h2>
+        <div>
+            <button class="btn btn-outline-primary btn-sm" onclick="toggleAutoRefresh()">
+                <i class="fas fa-sync" id="auto-refresh-icon"></i>
+                <span id="auto-refresh-text">Auto Refresh: OFF</span>
+            </button>
+            <button class="btn btn-primary btn-sm ms-2" onclick="refreshData()">
+                <i class="fas fa-refresh"></i> Refresh Now
+            </button>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% else %}
+
+    <!-- System Health Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ performance_stats.system.overall_score|round(1) }}%</div>
+                <div class="metric-label">System Health</div>
+                <span class="status-badge status-{{ performance_stats.system.status }}">
+                    {{ performance_stats.system.status|upper }}
+                </span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ performance_stats.jobs.currently_active }}</div>
+                <div class="metric-label">Active Jobs</div>
+                <small>Max: {{ queue_status.max_concurrent }}</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ performance_stats.jobs.success_rate_today|round(1) }}%</div>
+                <div class="metric-label">Success Rate (24h)</div>
+                <small>{{ performance_stats.jobs.completed_today }} completed</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ performance_stats.performance.average_duration_seconds|round(1) }}s</div>
+                <div class="metric-label">Avg Processing Time</div>
+                <small>{{ performance_stats.jobs.total_processed }} total</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resource Usage -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="chart-container">
+                <h5>🖥️ CPU Usage</h5>
+                <div class="progress-bar mb-2">
+                    <div class="progress-fill" style="width: {{ performance_stats.resources.cpu_usage.current }}%; 
+                         background-color: {% if performance_stats.resources.cpu_usage.current > 80 %}#dc3545{% elif performance_stats.resources.cpu_usage.current > 60 %}#ffc107{% else %}#28a745{% endif %}"></div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small>Current: {{ performance_stats.resources.cpu_usage.current|round(1) }}%</small>
+                    <small>Peak (1h): {{ performance_stats.resources.cpu_usage.peak_1h|round(1) }}%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-container">
+                <h5>💾 Memory Usage</h5>
+                <div class="progress-bar mb-2">
+                    <div class="progress-fill" style="width: {{ performance_stats.resources.memory_usage.current_percent }}%; 
+                         background-color: {% if performance_stats.resources.memory_usage.current_percent > 80 %}#dc3545{% elif performance_stats.resources.memory_usage.current_percent > 60 %}#ffc107{% else %}#28a745{% endif %}"></div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small>{{ performance_stats.resources.memory_usage.current_used_mb|round(0) }} MB</small>
+                    <small>{{ performance_stats.resources.memory_usage.current_percent|round(1) }}%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-container">
+                <h5>💽 Disk Usage</h5>
+                <div class="progress-bar mb-2">
+                    <div class="progress-fill" style="width: {{ performance_stats.resources.disk_usage.current_percent }}%; 
+                         background-color: {% if performance_stats.resources.disk_usage.current_percent > 80 %}#dc3545{% elif performance_stats.resources.disk_usage.current_percent > 60 %}#ffc107{% else %}#28a745{% endif %}"></div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small>{{ performance_stats.resources.disk_usage.free_mb|round(0) }} MB free</small>
+                    <small>{{ performance_stats.resources.disk_usage.current_percent|round(1) }}%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Steps Performance -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h5>⚙️ Processing Steps Performance</h5>
+                {% if performance_stats.steps %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Step</th>
+                                <th>Success Rate</th>
+                                <th>Avg Duration</th>
+                                <th>Min/Max Duration</th>
+                                <th>Total Runs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step_name, step_data in performance_stats.steps.items() %}
+                            <tr>
+                                <td><code>{{ step_name }}</code></td>
+                                <td>
+                                    <span class="badge {% if step_data.success_rate >= 90 %}bg-success{% elif step_data.success_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ step_data.success_rate|round(1) }}%
+                                    </span>
+                                </td>
+                                <td>{{ step_data.average_duration|round(2) }}s</td>
+                                <td>{{ step_data.min_duration|round(2) }}s / {{ step_data.max_duration|round(2) }}s</td>
+                                <td>{{ step_data.success_count + step_data.failure_count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No step performance data available yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Status -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5>📋 Job Queue Status</h5>
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Queue Size:</strong> {{ queue_status.queue_size }}<br>
+                        <strong>Active Jobs:</strong> {{ queue_status.active_jobs }}<br>
+                        <strong>Max Concurrent:</strong> {{ queue_status.max_concurrent }}
+                    </div>
+                    <div class="col-6">
+                        <strong>Total Queued:</strong> {{ queue_status.total_queued }}<br>
+                        <strong>Total Processed:</strong> {{ queue_status.total_processed }}<br>
+                        <strong>Total Failed:</strong> {{ queue_status.total_failed }}
+                    </div>
+                </div>
+                {% if queue_status.estimated_queue_time %}
+                <div class="mt-3">
+                    <strong>Estimated Queue Time:</strong> {{ (queue_status.estimated_queue_time / 60)|round(1) }} minutes
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h5>🎯 Active Jobs</h5>
+                {% if performance_stats.active_jobs_details %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Step</th>
+                                <th>Runtime</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in performance_stats.active_jobs_details %}
+                            <tr>
+                                <td><small>{{ job.filename }}</small></td>
+                                <td><code>{{ job.current_step }}</code></td>
+                                <td>{{ (job.runtime_seconds / 60)|round(1) }}m</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No active jobs currently.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Analysis -->
+    {% if performance_stats.errors.total_errors > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h5>❌ Error Analysis (24h)</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Total Errors:</strong> {{ performance_stats.errors.total_errors }}<br>
+                        <strong>Error Rate:</strong> {{ performance_stats.errors.error_rate|round(2) }}%
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Error Types:</strong><br>
+                        {% for error_type, count in performance_stats.errors.error_types.items() %}
+                        <span class="badge bg-secondary me-1">{{ error_type }}: {{ count }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+
+<!-- Auto-refresh functionality -->
+<script>
+let autoRefreshInterval = null;
+let autoRefreshEnabled = false;
+
+function toggleAutoRefresh() {
+    if (autoRefreshEnabled) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshEnabled = false;
+        document.getElementById('auto-refresh-text').textContent = 'Auto Refresh: OFF';
+        document.getElementById('auto-refresh-icon').className = 'fas fa-sync';
+    } else {
+        autoRefreshInterval = setInterval(refreshData, 30000); // 30 seconds
+        autoRefreshEnabled = true;
+        document.getElementById('auto-refresh-text').textContent = 'Auto Refresh: ON';
+        document.getElementById('auto-refresh-icon').className = 'fas fa-sync fa-spin';
+    }
+}
+
+function refreshData() {
+    window.location.reload();
+}
+
+// Update timestamp display
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const timestamp = document.createElement('div');
+    timestamp.className = 'text-muted small text-end';
+    timestamp.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+    document.querySelector('.container-fluid').appendChild(timestamp);
+});
+</script>
+{% endblock %}

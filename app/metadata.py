@@ -6,6 +6,8 @@ import re
 from typing import Dict, List, Optional, Tuple
 import time
 
+from retry_utils import async_retry, OLLAMA_RETRY_CONFIG, RetryError
+
 logger = logging.getLogger(__name__)
 
 class MetadataExtractor:
@@ -178,14 +180,23 @@ Be concise and accurate."""
                 }
             }
             
-            # Make API request
+            # Make API request with retry
             logger.info("Sending metadata extraction request to LLM...")
-            response = requests.post(
-                self.api_url,
-                json=request_data,
-                timeout=timeout,
-                headers={'Content-Type': 'application/json'}
-            )
+            
+            async def make_llm_request():
+                return requests.post(
+                    self.api_url,
+                    json=request_data,
+                    timeout=timeout,
+                    headers={'Content-Type': 'application/json'}
+                )
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(make_llm_request, config=OLLAMA_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"LLM metadata request failed after retries: {e}")
+                return {'success': False, 'error': f'Request failed after retries: {str(e)}'}
             
             if response.status_code == 200:
                 response_data = response.json()
@@ -239,12 +250,21 @@ Be concise and accurate."""
                 }
             }
             
-            response = requests.post(
-                self.api_url,
-                json=request_data,
-                timeout=timeout//2,  # Shorter timeout for fallback
-                headers={'Content-Type': 'application/json'}
-            )
+            async def make_fallback_request():
+                return requests.post(
+                    self.api_url,
+                    json=request_data,
+                    timeout=timeout//2,  # Shorter timeout for fallback
+                    headers={'Content-Type': 'application/json'}
+                )
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(make_fallback_request, config=OLLAMA_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"Fallback LLM request failed after retries: {e}")
+                # Fall back to rule-based extraction
+                return self._extract_with_rules(text_content)
             
             if response.status_code == 200:
                 response_data = response.json()

@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Tuple
 import time
 from pathlib import Path
 
+from retry_utils import async_retry, HURIDOCS_RETRY_CONFIG, RetryError
+
 logger = logging.getLogger(__name__)
 
 class HuridocsLayoutAnalyzer:
@@ -47,7 +49,15 @@ class HuridocsLayoutAnalyzer:
             return False
             
         try:
-            response = requests.get(self.status_url, timeout=10)
+            async def check_health():
+                return requests.get(self.status_url, timeout=10)
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(check_health, config=HURIDOCS_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"Huridocs health check failed after retries: {e}")
+                return False
             
             if response.status_code == 200:
                 logger.info("Huridocs layout service is healthy")
@@ -83,19 +93,26 @@ class HuridocsLayoutAnalyzer:
             
             logger.info(f"Starting layout analysis for: {pdf_path}")
             
-            # Prepare file for upload
-            with open(pdf_path, 'rb') as pdf_file:
-                files = {
-                    'file': (os.path.basename(pdf_path), pdf_file, 'application/pdf')
-                }
-                
-                # Make request to Huridocs service
-                logger.info("Sending PDF to Huridocs layout service...")
-                response = requests.post(
-                    self.analyze_url,
-                    files=files,
-                    timeout=timeout
-                )
+            # Prepare file for upload and make request with retry
+            logger.info("Sending PDF to Huridocs layout service...")
+            
+            async def make_layout_request():
+                with open(pdf_path, 'rb') as pdf_file:
+                    files = {
+                        'file': (os.path.basename(pdf_path), pdf_file, 'application/pdf')
+                    }
+                    return requests.post(
+                        self.analyze_url,
+                        files=files,
+                        timeout=timeout
+                    )
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(make_layout_request, config=HURIDOCS_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"Huridocs layout request failed after retries: {e}")
+                return self._create_error_result(f"Layout analysis failed after retries: {str(e)}")
             
             if response.status_code == 200:
                 try:

@@ -28,6 +28,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY download_model.py .
 RUN python download_model.py
 
+# Copy VERSION file (required for version.py)
+COPY VERSION /app/VERSION
+
 # Copy application code
 COPY app/ .
 

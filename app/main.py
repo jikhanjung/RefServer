@@ -7,7 +7,7 @@ import threading
 from typing import Dict, List, Optional
 from pathlib import Path
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +16,7 @@ from pydantic import BaseModel
 # Import processing modules
 from pipeline import process_uploaded_pdf, check_all_services
 from background_processor import get_background_processor
+from version import get_version
 from models import ProcessingJob
 from db import (
     get_paper_by_id, get_metadata_by_id, 
@@ -23,6 +24,9 @@ from db import (
     get_page_embeddings_by_id, get_page_embedding_by_page
 )
 from admin import router as admin_router
+from performance_monitor import get_system_performance_stats, get_performance_monitor
+from job_queue import get_queue_status, cancel_queued_job, JobPriority
+from file_security import validate_uploaded_file, get_security_status, FileSecurityError
 
 # Configure logging
 logging.basicConfig(
@@ -35,7 +39,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="RefServer - PDF Intelligence Pipeline",
     description="Unified PDF processing system for academic papers with OCR, embedding, layout analysis, and metadata extraction",
-    version="1.0.0",
+    version=get_version(),
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -124,6 +128,8 @@ class ServiceStatus(BaseModel):
     layout_analysis: bool
     metadata_extraction: bool
     timestamp: float
+    version: str
+    deployment_mode: str
 
 class PaperInfo(BaseModel):
     doc_id: str
@@ -222,24 +228,21 @@ async def get_service_status():
 # PDF processing endpoint
 @app.post("/upload", response_model=UploadResponse)
 async def upload_pdf(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to upload and process")
 ):
     """
-    Upload PDF file and start background processing
+    Upload PDF file and start background processing with security validation
     Returns job_id for status tracking
     """
-    # Validate file
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    
-    if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
-    
     temp_file_path = None
     
     try:
         logger.info(f"Uploading PDF: {file.filename}")
+        
+        # Get client IP for rate limiting
+        client_ip = request.client.host if request.client else None
         
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
@@ -248,6 +251,18 @@ async def upload_pdf(
             temp_file.write(content)
         
         logger.info(f"Uploaded file saved to: {temp_file_path}")
+        
+        # Comprehensive security validation
+        try:
+            validation_result = validate_uploaded_file(temp_file_path, file.filename, client_ip)
+            logger.info(f"File security validation passed for {file.filename}")
+            logger.debug(f"Validation details: {validation_result.get('checks_performed', [])}")
+        except FileSecurityError as e:
+            # Clean up temp file
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            logger.warning(f"Security validation failed for {file.filename}: {e}")
+            raise HTTPException(status_code=400, detail=f"Security validation failed: {str(e)}")
         
         # Create processing job
         processor = get_background_processor()
@@ -263,6 +278,8 @@ async def upload_pdf(
             status="processing"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error uploading PDF: {e}")
         
@@ -307,6 +324,7 @@ async def get_job_status(job_id: str):
 
 @app.post("/process", response_model=ProcessingResult, deprecated=True)
 async def process_pdf_legacy(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to process")
 ):
@@ -326,6 +344,9 @@ async def process_pdf_legacy(
     try:
         logger.info(f"Processing PDF upload (legacy): {file.filename}")
         
+        # Get client IP for rate limiting
+        client_ip = request.client.host if request.client else None
+        
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             temp_file_path = temp_file.name
@@ -333,6 +354,17 @@ async def process_pdf_legacy(
             temp_file.write(content)
         
         logger.info(f"Uploaded file saved to: {temp_file_path}")
+        
+        # Comprehensive security validation
+        try:
+            validation_result = validate_uploaded_file(temp_file_path, file.filename, client_ip)
+            logger.info(f"File security validation passed for legacy endpoint: {file.filename}")
+        except FileSecurityError as e:
+            # Clean up temp file
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            logger.warning(f"Security validation failed for legacy endpoint {file.filename}: {e}")
+            raise HTTPException(status_code=400, detail=f"Security validation failed: {str(e)}")
         
         # Process PDF through pipeline (synchronous)
         result = process_uploaded_pdf(temp_file_path, file.filename)
@@ -668,6 +700,265 @@ async def get_statistics():
     except Exception as e:
         logger.error(f"Error getting statistics: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
+
+# Performance monitoring endpoints
+@app.get("/performance/stats")
+async def get_performance_statistics():
+    """Get comprehensive performance statistics and metrics"""
+    try:
+        stats = get_system_performance_stats()
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting performance statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get performance statistics: {str(e)}")
+
+@app.get("/performance/export")
+async def export_performance_metrics(format: str = "json"):
+    """Export performance metrics in specified format"""
+    try:
+        if format not in ["json", "csv"]:
+            raise HTTPException(status_code=400, detail="Format must be 'json' or 'csv'")
+        
+        monitor = get_performance_monitor()
+        exported_data = monitor.export_metrics(format)
+        
+        if format == "json":
+            import json
+            return JSONResponse(content=json.loads(exported_data))
+        else:  # CSV
+            from fastapi.responses import Response
+            return Response(
+                content=exported_data,
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=performance_metrics.csv"}
+            )
+        
+    except Exception as e:
+        logger.error(f"Error exporting performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to export metrics: {str(e)}")
+
+@app.get("/performance/system")
+async def get_system_metrics():
+    """Get current system resource metrics"""
+    try:
+        import psutil
+        import time
+        
+        # Current system metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Load average (Unix only)
+        load_avg = None
+        if hasattr(os, 'getloadavg'):
+            load_avg = list(os.getloadavg())
+        
+        # Active processes
+        active_jobs = len(get_background_processor()._active_jobs)
+        
+        return {
+            "timestamp": time.time(),
+            "cpu": {
+                "percent": cpu_percent,
+                "load_average": load_avg
+            },
+            "memory": {
+                "total_mb": memory.total / 1024 / 1024,
+                "used_mb": memory.used / 1024 / 1024,
+                "available_mb": memory.available / 1024 / 1024,
+                "percent": memory.percent
+            },
+            "disk": {
+                "total_mb": disk.total / 1024 / 1024,
+                "used_mb": disk.used / 1024 / 1024,
+                "free_mb": disk.free / 1024 / 1024,
+                "percent": disk.percent
+            },
+            "jobs": {
+                "active_count": active_jobs
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting system metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get system metrics: {str(e)}")
+
+@app.get("/performance/jobs")
+async def get_job_performance_metrics():
+    """Get performance metrics for recent jobs"""
+    try:
+        monitor = get_performance_monitor()
+        
+        # Get recent completed jobs (last 50)
+        recent_jobs = list(monitor.completed_jobs)[-50:] if monitor.completed_jobs else []
+        
+        job_metrics = []
+        for job in recent_jobs:
+            job_metrics.append({
+                "job_id": job.job_id,
+                "filename": job.filename,
+                "duration": job.duration,
+                "success": job.success,
+                "file_size_mb": job.file_size_mb,
+                "page_count": job.page_count,
+                "steps_completed": job.steps_completed,
+                "steps_failed": job.steps_failed,
+                "start_time": job.start_time,
+                "error_message": job.error_message
+            })
+        
+        # Get active jobs
+        active_jobs = []
+        for job_id, info in monitor.active_jobs.items():
+            active_jobs.append({
+                "job_id": job_id,
+                "filename": info['filename'],
+                "current_step": info['current_step'],
+                "runtime_seconds": time.time() - info['start_time']
+            })
+        
+        return {
+            "recent_jobs": job_metrics,
+            "active_jobs": active_jobs,
+            "total_completed": len(monitor.completed_jobs),
+            "total_active": len(monitor.active_jobs)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting job performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get job metrics: {str(e)}")
+
+# Job queue management endpoints
+@app.get("/queue/status")
+async def get_job_queue_status():
+    """Get current job queue status and statistics"""
+    try:
+        status = get_queue_status()
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get queue status: {str(e)}")
+
+@app.post("/queue/cancel/{job_id}")
+async def cancel_job_in_queue(job_id: str):
+    """Cancel a job in the queue"""
+    try:
+        success = cancel_queued_job(job_id)
+        
+        if success:
+            return {"message": f"Job {job_id} cancelled successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to cancel job {job_id} (may not be in queue)")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
+
+@app.post("/upload-priority")
+async def upload_pdf_with_priority(
+    request: Request,
+    file: UploadFile = File(...),
+    priority: str = "normal"
+):
+    """Upload PDF with priority level for queue processing with security validation"""
+    try:
+        # Validate priority
+        priority_map = {
+            "low": JobPriority.LOW,
+            "normal": JobPriority.NORMAL, 
+            "high": JobPriority.HIGH,
+            "urgent": JobPriority.URGENT
+        }
+        
+        if priority.lower() not in priority_map:
+            raise HTTPException(status_code=400, detail="Priority must be one of: low, normal, high, urgent")
+        
+        job_priority = priority_map[priority.lower()]
+        
+        # Get client IP for rate limiting
+        client_ip = request.client.host if request.client else None
+        
+        # Create temporary file
+        temp_file_path = None
+        try:
+            # Create temp file
+            temp_fd, temp_file_path = tempfile.mkstemp(suffix='.pdf', prefix='refserver_')
+            
+            # Write uploaded content
+            content = await file.read()
+            with os.fdopen(temp_fd, 'wb') as temp_file:
+                temp_file.write(content)
+            
+            # Comprehensive security validation
+            try:
+                validation_result = validate_uploaded_file(temp_file_path, file.filename, client_ip)
+                logger.info(f"File security validation passed for priority upload: {file.filename}")
+            except FileSecurityError as e:
+                # Clean up temp file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                logger.warning(f"Security validation failed for priority upload {file.filename}: {e}")
+                raise HTTPException(status_code=400, detail=f"Security validation failed: {str(e)}")
+            
+            # Get background processor
+            processor = get_background_processor()
+            
+            # Create job record
+            job_id = processor.create_upload_job(file.filename, temp_file_path)
+            
+            # Submit to queue with priority
+            success = processor.submit_job_to_queue(job_id, file.filename, temp_file_path, job_priority)
+            
+            if success:
+                return {
+                    "job_id": job_id,
+                    "message": f"PDF uploaded and queued with {priority} priority",
+                    "priority": priority.upper(),
+                    "status": "queued"
+                }
+            else:
+                # Clean up temp file if job submission failed
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                raise HTTPException(status_code=503, detail="Queue is full, please try again later")
+            
+        except HTTPException:
+            # Clean up temp file on HTTP error
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+            raise
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in priority upload: {e}")
+        # Clean up temp file on error
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# Security status endpoint
+@app.get("/security/status")
+async def get_security_system_status():
+    """Get current file security system status and configuration"""
+    try:
+        status = get_security_status()
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error getting security status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get security status: {str(e)}")
 
 # Job cleanup endpoint
 @app.post("/admin/cleanup-jobs")

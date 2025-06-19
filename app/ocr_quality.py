@@ -7,6 +7,8 @@ from typing import Dict, Optional, Tuple
 from PIL import Image
 import io
 
+from retry_utils import async_retry, OLLAMA_RETRY_CONFIG, RetryError
+
 logger = logging.getLogger(__name__)
 
 class LLaVAQualityAssessor:
@@ -256,14 +258,23 @@ Be specific about any issues you observe and provide actionable recommendations.
                 }
             }
             
-            # Make API request
+            # Make API request with retry
             logger.info("Sending request to LLaVA...")
-            response = requests.post(
-                self.api_url,
-                json=request_data,
-                timeout=timeout,
-                headers={'Content-Type': 'application/json'}
-            )
+            
+            async def make_llava_request():
+                return requests.post(
+                    self.api_url,
+                    json=request_data,
+                    timeout=timeout,
+                    headers={'Content-Type': 'application/json'}
+                )
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(make_llava_request, config=OLLAMA_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"LLaVA request failed after retries: {e}")
+                return self._create_default_assessment()
             
             if response.status_code == 200:
                 response_data = response.json()
@@ -296,9 +307,18 @@ Be specific about any issues you observe and provide actionable recommendations.
             bool: True if connection is successful
         """
         try:
-            # Check server health
+            # Check server health with retry
             health_url = f"{self.ollama_host}/api/tags"
-            response = requests.get(health_url, timeout=10)
+            
+            async def check_health():
+                return requests.get(health_url, timeout=10)
+            
+            try:
+                import asyncio
+                response = asyncio.run(async_retry(check_health, config=OLLAMA_RETRY_CONFIG))
+            except RetryError as e:
+                logger.error(f"Ollama health check failed after retries: {e}")
+                return False
             
             if response.status_code == 200:
                 models_data = response.json()

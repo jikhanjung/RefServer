@@ -1,0 +1,452 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Job Queue Management{% endblock %}
+
+{% block extra_css %}
+<style>
+.queue-card {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.queue-metric {
+    text-align: center;
+}
+
+.queue-metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    display: block;
+}
+
+.queue-metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.priority-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.priority-urgent { background-color: #dc3545; color: white; }
+.priority-high { background-color: #fd7e14; color: white; }
+.priority-normal { background-color: #6c757d; color: white; }
+.priority-low { background-color: #28a745; color: white; }
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-queued { background-color: #17a2b8; color: white; }
+.status-processing { background-color: #ffc107; color: black; }
+.status-completed { background-color: #28a745; color: white; }
+.status-failed { background-color: #dc3545; color: white; }
+.status-uploaded { background-color: #6f42c1; color: white; }
+
+.job-table {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.progress-wrapper {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    height: 1.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+    height: 100%;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.queue-visualization {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+}
+
+.queue-slot {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    margin: 2px;
+    position: relative;
+    cursor: pointer;
+}
+
+.queue-slot.active {
+    background: #28a745;
+    animation: pulse 2s infinite;
+}
+
+.queue-slot.queued {
+    background: #6c757d;
+}
+
+.queue-slot.empty {
+    background: #e9ecef;
+    border: 2px dashed #dee2e6;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📋 Job Queue Management</h2>
+        <div>
+            <button class="btn btn-outline-primary btn-sm" onclick="toggleAutoRefresh()">
+                <i class="fas fa-sync" id="auto-refresh-icon"></i>
+                <span id="auto-refresh-text">Auto Refresh: OFF</span>
+            </button>
+            <button class="btn btn-primary btn-sm ms-2" onclick="refreshData()">
+                <i class="fas fa-refresh"></i> Refresh Now
+            </button>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% else %}
+
+    <!-- Queue Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="queue-card">
+                <div class="queue-metric">
+                    <span class="queue-metric-value">{{ queue_status.queue_size }}</span>
+                    <span class="queue-metric-label">In Queue</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="queue-card">
+                <div class="queue-metric">
+                    <span class="queue-metric-value">{{ queue_status.active_jobs }}</span>
+                    <span class="queue-metric-label">Processing</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="queue-card">
+                <div class="queue-metric">
+                    <span class="queue-metric-value">{{ queue_status.max_concurrent }}</span>
+                    <span class="queue-metric-label">Max Concurrent</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="queue-card">
+                <div class="queue-metric">
+                    <span class="queue-metric-value">{{ (queue_status.estimated_queue_time / 60)|round(1) if queue_status.estimated_queue_time else 0 }}</span>
+                    <span class="queue-metric-label">Est. Time (min)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="queue-visualization">
+                <h5>📊 Queue Statistics</h5>
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Total Queued:</strong> {{ queue_status.total_queued }}<br>
+                        <strong>Total Processed:</strong> {{ queue_status.total_processed }}<br>
+                        <strong>Total Failed:</strong> {{ queue_status.total_failed }}
+                    </div>
+                    <div class="col-6">
+                        <strong>Success Rate:</strong> 
+                        {% set success_rate = (queue_status.total_processed / (queue_status.total_processed + queue_status.total_failed) * 100) if (queue_status.total_processed + queue_status.total_failed) > 0 else 0 %}
+                        <span class="badge {% if success_rate >= 90 %}bg-success{% elif success_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}">
+                            {{ success_rate|round(1) }}%
+                        </span><br>
+                        <strong>Avg Wait Time:</strong> {{ queue_status.average_wait_time|round(1) if queue_status.average_wait_time else 0 }}s<br>
+                        <strong>Avg Processing:</strong> {{ queue_status.average_processing_time|round(1) if queue_status.average_processing_time else 0 }}s
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="queue-visualization">
+                <h5>🎰 Processing Slots</h5>
+                <p class="small text-muted mb-3">Visual representation of processing capacity</p>
+                <div>
+                    {% for i in range(queue_status.max_concurrent) %}
+                        {% if i < queue_status.active_jobs %}
+                            <div class="queue-slot active" title="Slot {{ i+1 }}: Processing" data-toggle="tooltip"></div>
+                        {% else %}
+                            <div class="queue-slot empty" title="Slot {{ i+1 }}: Available" data-toggle="tooltip"></div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <small class="text-muted">
+                    <i class="fas fa-circle text-success"></i> Active
+                    <i class="fas fa-circle text-secondary ms-2"></i> Available
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Queue Items -->
+    {% if queue_status.queue_items %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="job-table">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🔄 Current Queue (Next {{ queue_status.queue_items|length }} jobs)</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Position</th>
+                                <th>Filename</th>
+                                <th>Priority</th>
+                                <th>Queued For</th>
+                                <th>Est. Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in queue_status.queue_items %}
+                            <tr>
+                                <td><strong>#{{ loop.index }}</strong></td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 200px;" title="{{ job.filename }}">
+                                        {{ job.filename }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="priority-badge priority-{{ job.priority.lower() }}">
+                                        {{ job.priority }}
+                                    </span>
+                                </td>
+                                <td>{{ (job.queued_for / 60)|round(1) }}m</td>
+                                <td>{{ (job.estimated_duration / 60)|round(1) if job.estimated_duration else 'N/A' }}m</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="cancelJob('{{ job.job_id }}')">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Jobs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="job-table">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">📝 Recent Jobs (Last 20)</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Filename</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Created</th>
+                                <th>Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in recent_jobs %}
+                            <tr>
+                                <td>
+                                    <code class="small">{{ job.job_id[:8] }}...</code>
+                                </td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 200px;" title="{{ job.filename }}">
+                                        {{ job.filename }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-{{ job.status }}">
+                                        {{ job.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if job.status == 'processing' %}
+                                    <div class="progress-wrapper">
+                                        <div class="progress-fill" style="width: {{ job.progress_percentage }}%">
+                                            {{ job.progress_percentage }}%
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ job.current_step }}</small>
+                                    {% else %}
+                                    <span class="text-muted">{{ job.progress_percentage }}%</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ job.created_at.strftime('%H:%M:%S') if job.created_at else 'N/A' }}</small>
+                                </td>
+                                <td>
+                                    {% if job.started_at and job.completed_at %}
+                                        {% set duration = (job.completed_at - job.started_at).total_seconds() %}
+                                        {{ (duration / 60)|round(1) }}m
+                                    {% elif job.started_at %}
+                                        {% set duration = (moment().naive - job.started_at).total_seconds() %}
+                                        {{ (duration / 60)|round(1) }}m
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.status == 'queued' %}
+                                    <button class="btn btn-sm btn-outline-danger" onclick="cancelJob('{{ job.job_id }}')">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewJobDetails('{{ job.job_id }}')">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<!-- Job Cancel Modal -->
+<div class="modal fade" id="cancelJobModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancel Job</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this job?</p>
+                <p><strong>Job ID:</strong> <span id="cancelJobId"></span></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, Keep Job</button>
+                <button type="button" class="btn btn-danger" onclick="confirmCancelJob()">Yes, Cancel Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let autoRefreshInterval = null;
+let autoRefreshEnabled = false;
+let jobToCancel = null;
+
+function toggleAutoRefresh() {
+    if (autoRefreshEnabled) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshEnabled = false;
+        document.getElementById('auto-refresh-text').textContent = 'Auto Refresh: OFF';
+        document.getElementById('auto-refresh-icon').className = 'fas fa-sync';
+    } else {
+        autoRefreshInterval = setInterval(refreshData, 10000); // 10 seconds
+        autoRefreshEnabled = true;
+        document.getElementById('auto-refresh-text').textContent = 'Auto Refresh: ON';
+        document.getElementById('auto-refresh-icon').className = 'fas fa-sync fa-spin';
+    }
+}
+
+function refreshData() {
+    window.location.reload();
+}
+
+function cancelJob(jobId) {
+    jobToCancel = jobId;
+    document.getElementById('cancelJobId').textContent = jobId;
+    new bootstrap.Modal(document.getElementById('cancelJobModal')).show();
+}
+
+function confirmCancelJob() {
+    if (jobToCancel) {
+        fetch(`/queue/cancel/${jobToCancel}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert(data.message);
+                refreshData();
+            } else {
+                alert('Failed to cancel job');
+            }
+        })
+        .catch(error => {
+            alert('Error cancelling job: ' + error);
+        });
+        
+        bootstrap.Modal.getInstance(document.getElementById('cancelJobModal')).hide();
+    }
+}
+
+function viewJobDetails(jobId) {
+    // Open job details in new tab/window
+    window.open(`/job/${jobId}`, '_blank');
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add timestamp
+    const now = new Date();
+    const timestamp = document.createElement('div');
+    timestamp.className = 'text-muted small text-end mt-3';
+    timestamp.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+    document.querySelector('.container-fluid').appendChild(timestamp);
+});
+</script>
+{% endblock %}
