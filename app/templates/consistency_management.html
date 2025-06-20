@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block title %}Database Consistency{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h1>Database Consistency Management</h1>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <!-- Consistency Status Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Database Consistency Status</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-database"></i> Current Status</h6>
+                    {% if consistency_summary.status == 'consistent' %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> Databases are consistent
+                        </div>
+                    {% elif consistency_summary.status == 'inconsistent' %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> Inconsistencies detected
+                        </div>
+                    {% elif consistency_summary.status == 'never_checked' %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> Consistency has never been checked
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary">
+                            <i class="fas fa-question-circle"></i> Status unknown
+                        </div>
+                    {% endif %}
+                    
+                    {% if consistency_summary.last_check %}
+                    <p><strong>Last Check:</strong> {{ consistency_summary.last_check }}</p>
+                    {% endif %}
+                    
+                    {% if consistency_summary.total_issues is defined %}
+                    <p><strong>Total Issues:</strong> {{ consistency_summary.total_issues }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-6">
+                    <h6><i class="fas fa-chart-bar"></i> Database Counts</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Database</th>
+                                <th>Papers</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>SQLite</td>
+                                <td>{{ consistency_summary.sqlite_papers or 0 }}</td>
+                                <td><span class="badge bg-primary">Primary</span></td>
+                            </tr>
+                            <tr>
+                                <td>ChromaDB</td>
+                                <td>{{ consistency_summary.chromadb_papers or 0 }}</td>
+                                <td>
+                                    {% if consistency_summary.counts_match %}
+                                        <span class="badge bg-success">Synced</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Out of Sync</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Consistency Check Actions -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Consistency Check Actions</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <button type="button" class="btn btn-primary w-100 mb-2" onclick="runQuickCheck()">
+                        <i class="fas fa-tachometer-alt"></i> Quick Check
+                    </button>
+                    <small class="text-muted">Fast check of basic consistency metrics</small>
+                </div>
+                <div class="col-md-4">
+                    <button type="button" class="btn btn-info w-100 mb-2" onclick="runFullCheck()">
+                        <i class="fas fa-search"></i> Full Analysis
+                    </button>
+                    <small class="text-muted">Comprehensive consistency analysis</small>
+                </div>
+                <div class="col-md-4">
+                    {% if user.is_superuser %}
+                    <button type="button" class="btn btn-warning w-100 mb-2" onclick="autoFixIssues()">
+                        <i class="fas fa-wrench"></i> Auto Fix (Safe)
+                    </button>
+                    <small class="text-muted">Automatically fix safe issues</small>
+                    {% else %}
+                    <button type="button" class="btn btn-secondary w-100 mb-2" disabled>
+                        <i class="fas fa-lock"></i> Auto Fix (Superuser Only)
+                    </button>
+                    <small class="text-muted">Requires superuser privileges</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Display -->
+    <div class="card" id="resultsCard" style="display: none;">
+        <div class="card-header">
+            <h5 class="mb-0">Consistency Check Results</h5>
+        </div>
+        <div class="card-body">
+            <div id="resultsContent">
+                <!-- Results will be loaded here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Issues Detail Modal -->
+    <div class="modal fade" id="issuesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Consistency Issues Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="issuesContent">
+                        <!-- Issues will be loaded here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Quick consistency check
+async function runQuickCheck() {
+    try {
+        showLoading('Running quick consistency check...');
+        
+        const response = await fetch('/admin/consistency/summary', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            const results = await response.json();
+            displayQuickResults(results);
+        } else {
+            const error = await response.json();
+            showError(`Quick check failed: ${error.detail}`);
+        }
+    } catch (error) {
+        showError(`Error: ${error.message}`);
+    }
+}
+
+// Full consistency check
+async function runFullCheck() {
+    try {
+        showLoading('Running full consistency analysis... This may take a few minutes.');
+        
+        const response = await fetch('/admin/consistency/check', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            const results = await response.json();
+            displayFullResults(results);
+        } else {
+            const error = await response.json();
+            showError(`Full check failed: ${error.detail}`);
+        }
+    } catch (error) {
+        showError(`Error: ${error.message}`);
+    }
+}
+
+// Auto fix issues
+async function autoFixIssues() {
+    if (!confirm('This will automatically fix safe consistency issues. Continue?')) {
+        return;
+    }
+    
+    try {
+        showLoading('Fixing consistency issues...');
+        
+        const response = await fetch('/admin/consistency/fix', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            const results = await response.json();
+            showSuccess(`Fixed ${results.fixed_count} issues. ${results.failed_count} failed.`);
+            // Refresh the page to show updated status
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            const error = await response.json();
+            showError(`Auto fix failed: ${error.detail}`);
+        }
+    } catch (error) {
+        showError(`Error: ${error.message}`);
+    }
+}
+
+// Display quick check results
+function displayQuickResults(results) {
+    const content = `
+        <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle"></i> Quick Check Results</h6>
+            <p><strong>Status:</strong> ${results.status}</p>
+            <p><strong>SQLite Papers:</strong> ${results.sqlite_papers}</p>
+            <p><strong>ChromaDB Papers:</strong> ${results.chromadb_papers}</p>
+            <p><strong>Counts Match:</strong> ${results.counts_match ? 'Yes' : 'No'}</p>
+            ${results.last_check ? `<p><strong>Last Full Check:</strong> ${results.last_check}</p>` : ''}
+        </div>
+    `;
+    
+    document.getElementById('resultsContent').innerHTML = content;
+    document.getElementById('resultsCard').style.display = 'block';
+}
+
+// Display full check results
+function displayFullResults(results) {
+    const statusClass = getStatusClass(results.overall_status);
+    
+    let content = `
+        <div class="alert alert-${statusClass}">
+            <h6><i class="fas fa-chart-line"></i> Full Consistency Analysis</h6>
+            <p><strong>Overall Status:</strong> ${results.overall_status}</p>
+            <p><strong>Check Duration:</strong> ${results.duration_seconds.toFixed(2)} seconds</p>
+            <p><strong>Total Issues:</strong> ${results.total_issues}</p>
+        </div>
+    `;
+    
+    if (results.total_issues > 0) {
+        content += `
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-danger">${results.issues_by_severity.critical}</h5>
+                            <p class="card-text">Critical</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-warning">${results.issues_by_severity.high}</h5>
+                            <p class="card-text">High</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-info">${results.issues_by_severity.medium}</h5>
+                            <p class="card-text">Medium</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-secondary">${results.issues_by_severity.low}</h5>
+                            <p class="card-text">Low</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" class="btn btn-info mb-3" onclick="showIssuesDetails(${JSON.stringify(results.issues).replace(/"/g, '&quot;')})">
+                <i class="fas fa-list"></i> View Issue Details
+            </button>
+        `;
+    }
+    
+    if (results.recommendations && results.recommendations.length > 0) {
+        content += `
+            <div class="alert alert-light">
+                <h6><i class="fas fa-lightbulb"></i> Recommendations</h6>
+                <ul>
+                    ${results.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    document.getElementById('resultsContent').innerHTML = content;
+    document.getElementById('resultsCard').style.display = 'block';
+}
+
+// Show issues details in modal
+function showIssuesDetails(issues) {
+    let content = '';
+    
+    if (issues.length === 0) {
+        content = '<p>No issues found!</p>';
+    } else {
+        content = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Doc ID</th>
+                            <th>Severity</th>
+                            <th>Description</th>
+                            <th>Suggested Fix</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        issues.forEach(issue => {
+            const severityClass = getSeverityClass(issue.severity);
+            content += `
+                <tr>
+                    <td><span class="badge bg-secondary">${issue.issue_type}</span></td>
+                    <td><small>${issue.doc_id}</small></td>
+                    <td><span class="badge bg-${severityClass}">${issue.severity}</span></td>
+                    <td>${issue.description}</td>
+                    <td><small>${issue.suggested_fix || 'Manual intervention required'}</small></td>
+                </tr>
+            `;
+        });
+        
+        content += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    document.getElementById('issuesContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('issuesModal')).show();
+}
+
+// Helper functions
+function getStatusClass(status) {
+    switch (status) {
+        case 'excellent': return 'success';
+        case 'good': return 'info';
+        case 'fair': return 'warning';
+        case 'poor': return 'warning';
+        case 'critical': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+function getSeverityClass(severity) {
+    switch (severity) {
+        case 'critical': return 'danger';
+        case 'high': return 'warning';
+        case 'medium': return 'info';
+        case 'low': return 'secondary';
+        default: return 'secondary';
+    }
+}
+
+function showLoading(message) {
+    document.getElementById('resultsContent').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">${message}</p>
+        </div>
+    `;
+    document.getElementById('resultsCard').style.display = 'block';
+}
+
+function showError(message) {
+    document.getElementById('resultsContent').innerHTML = `
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i> ${message}
+        </div>
+    `;
+    document.getElementById('resultsCard').style.display = 'block';
+}
+
+function showSuccess(message) {
+    document.getElementById('resultsContent').innerHTML = `
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> ${message}
+        </div>
+    `;
+    document.getElementById('resultsCard').style.display = 'block';
+}
+</script>
+{% endblock %}

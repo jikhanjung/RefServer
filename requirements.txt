@@ -24,3 +24,4 @@ PyPDF2
 psutil
 chromadb>=0.4.15
 schedule
+apscheduler

@@ -94,6 +94,15 @@ async def startup_event():
     _cleanup_task = asyncio.create_task(cleanup_jobs_periodically())
     
     logger.info("✅ Background job cleanup scheduler started")
+    
+    # Initialize backup scheduler
+    try:
+        from backup import get_backup_manager
+        backup_manager = get_backup_manager()
+        backup_manager.start_scheduler()
+        logger.info("✅ Backup scheduler started")
+    except Exception as e:
+        logger.error(f"Failed to start backup scheduler: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -112,6 +121,15 @@ async def shutdown_event():
             await _cleanup_task
         except asyncio.CancelledError:
             pass
+    
+    # Stop backup scheduler
+    try:
+        from backup import get_backup_manager
+        backup_manager = get_backup_manager()
+        backup_manager.stop_scheduler()
+        logger.info("✅ Backup scheduler stopped")
+    except Exception as e:
+        logger.error(f"Failed to stop backup scheduler: {e}")
     
     logger.info("✅ Background tasks stopped")
 

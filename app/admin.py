@@ -885,6 +885,439 @@ async def scheduler_management(request: Request):
             }
         )
 
+# Backup management endpoints
+@router.post("/backup/trigger")
+async def trigger_backup(
+    request: Request,
+    backup_type: str = "snapshot",
+    compress: bool = True,
+    description: str = "",
+    retention_days: int = 30,
+    unified: bool = False,
+    user: AdminUser = Depends(require_auth)
+):
+    """Manually trigger a database backup"""
+    try:
+        # Validate backup type
+        if backup_type not in ["full", "incremental", "snapshot"]:
+            raise HTTPException(status_code=400, detail="Invalid backup type")
+        
+        options = {
+            "compress": compress,
+            "description": description or f"Manual backup by {user.username}",
+            "retention_days": retention_days
+        }
+        
+        if unified:
+            # Create unified backup (SQLite + ChromaDB)
+            from backup import get_unified_backup_manager
+            backup_manager = get_unified_backup_manager()
+            result = backup_manager.create_unified_backup(backup_type, options)
+        else:
+            # Create SQLite-only backup
+            from backup import get_backup_manager
+            backup_manager = get_backup_manager()
+            result = backup_manager.create_backup(backup_type, options)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Backup trigger failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
+
+
+@router.get("/backup/status")
+async def get_backup_status(user: AdminUser = Depends(require_auth)):
+    """Get current backup system status"""
+    try:
+        from backup import get_backup_manager, get_chromadb_backup_manager
+        from pathlib import Path
+        
+        # Get SQLite backup status
+        sqlite_manager = get_backup_manager()
+        sqlite_status = sqlite_manager.get_backup_status()
+        
+        # Get ChromaDB backup status
+        chromadb_manager = get_chromadb_backup_manager()
+        chromadb_dir = chromadb_manager.chromadb_dir
+        chromadb_exists = chromadb_dir.exists()
+        
+        # Count ChromaDB backups
+        chromadb_backups = 0
+        chromadb_size = 0
+        if chromadb_manager.chromadb_backup_dir.exists():
+            for subdir in ["daily", "weekly", "snapshots"]:
+                backup_dir = chromadb_manager.chromadb_backup_dir / subdir
+                if backup_dir.exists():
+                    for backup_file in backup_dir.glob("*.tar*"):
+                        chromadb_backups += 1
+                        chromadb_size += backup_file.stat().st_size
+        
+        # Combined status
+        status = {
+            "sqlite": sqlite_status,
+            "chromadb": {
+                "directory_exists": chromadb_exists,
+                "backup_directory": str(chromadb_manager.chromadb_backup_dir),
+                "total_backups": chromadb_backups,
+                "total_size_bytes": chromadb_size
+            },
+            "unified_backup_available": True
+        }
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Failed to get backup status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get backup status: {str(e)}")
+
+
+@router.get("/backup/history")
+async def get_backup_history(
+    limit: int = 50,
+    user: AdminUser = Depends(require_auth)
+):
+    """Get backup history"""
+    try:
+        from backup import get_backup_manager
+        
+        backup_manager = get_backup_manager()
+        history = backup_manager.get_backup_history(limit=limit)
+        
+        return {"backups": history, "total": len(history)}
+        
+    except Exception as e:
+        logger.error(f"Failed to get backup history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get backup history: {str(e)}")
+
+
+@router.post("/backup/restore/{backup_id}")
+async def restore_backup(
+    backup_id: str,
+    target_path: Optional[str] = None,
+    user: AdminUser = Depends(require_auth)
+):
+    """Restore a specific backup"""
+    try:
+        # Only superusers can restore backups
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only superusers can restore backups")
+        
+        from backup import get_backup_manager
+        
+        backup_manager = get_backup_manager()
+        result = backup_manager.restore_backup(backup_id, target_path)
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Backup restore failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+
+
+@router.get("/backup", response_class=HTMLResponse)
+async def backup_management_page(request: Request, user: AdminUser = Depends(require_auth)):
+    """Backup management dashboard page"""
+    try:
+        # Get backup status using the same logic as the API endpoint
+        backup_status = await get_backup_status(user)
+        
+        # Get recent backups
+        from backup import get_backup_manager
+        backup_manager = get_backup_manager()
+        recent_backups = backup_manager.get_backup_history(limit=10)
+        
+        return templates.TemplateResponse(
+            "backup_management.html",
+            {
+                "request": request,
+                "user": user,
+                "backup_status": backup_status,
+                "recent_backups": recent_backups,
+                "version": "v0.1.12"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "backup_management.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading backup management: {str(e)}",
+                "version": "v0.1.12"
+            }
+        )
+
+
+@router.post("/backup/health-check")
+async def run_backup_health_check(user: AdminUser = Depends(require_auth)):
+    """Run manual backup health check"""
+    try:
+        from backup import get_backup_manager
+        
+        backup_manager = get_backup_manager()
+        
+        # Run health check
+        backup_manager._backup_health_check()
+        
+        # Get current status
+        status = backup_manager.get_backup_status()
+        
+        return {
+            "status": "completed",
+            "timestamp": datetime.now().isoformat(),
+            "backup_status": status
+        }
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+
+@router.post("/backup/verify/{backup_id}")
+async def verify_backup_integrity(backup_id: str, user: AdminUser = Depends(require_auth)):
+    """Verify the integrity of a specific backup"""
+    try:
+        from backup import get_backup_manager
+        from pathlib import Path
+        
+        backup_manager = get_backup_manager()
+        
+        # Find backup in history
+        backup_info = None
+        for backup in backup_manager.history:
+            if backup.get("backup_id") == backup_id:
+                backup_info = backup
+                break
+        
+        if not backup_info:
+            raise HTTPException(status_code=404, detail=f"Backup not found: {backup_id}")
+        
+        if backup_info.get("status") != "completed":
+            raise HTTPException(status_code=400, detail="Cannot verify failed backup")
+        
+        backup_path = Path(backup_info["path"])
+        if not backup_path.exists():
+            raise HTTPException(status_code=404, detail="Backup file not found")
+        
+        # Verify integrity
+        is_valid = backup_manager.verify_backup_integrity(backup_path)
+        
+        return {
+            "backup_id": backup_id,
+            "path": str(backup_path),
+            "integrity_check": "passed" if is_valid else "failed",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Backup verification failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+
+
+@router.get("/disaster-recovery/status")
+async def get_disaster_recovery_status(user: AdminUser = Depends(require_auth)):
+    """Get disaster recovery readiness status"""
+    try:
+        from backup import get_backup_manager, get_chromadb_backup_manager
+        from pathlib import Path
+        import shutil
+        
+        # Check backup systems
+        sqlite_manager = get_backup_manager()
+        chromadb_manager = get_chromadb_backup_manager()
+        
+        # Get backup counts and recent status
+        sqlite_status = sqlite_manager.get_backup_status()
+        recent_backups = sqlite_manager.get_backup_history(limit=5)
+        
+        # Check ChromaDB backups
+        chromadb_backups = 0
+        if chromadb_manager.chromadb_backup_dir.exists():
+            for subdir in ["daily", "weekly", "snapshots"]:
+                backup_dir = chromadb_manager.chromadb_backup_dir / subdir
+                if backup_dir.exists():
+                    chromadb_backups += len(list(backup_dir.glob("*.tar*")))
+        
+        # Check disk space
+        total, used, free = shutil.disk_usage("/data")
+        free_gb = free // (1024**3)
+        
+        # Check scripts
+        scripts_dir = Path("/home/jikhanjung/projects/RefServer/scripts")
+        recovery_script = scripts_dir / "disaster_recovery.sh"
+        check_script = scripts_dir / "check_backups.sh"
+        
+        # Calculate readiness score
+        score = 0
+        max_score = 10
+        
+        # Recent backups (3 points)
+        if len([b for b in recent_backups if b.get("status") == "completed"]) >= 3:
+            score += 3
+        elif len([b for b in recent_backups if b.get("status") == "completed"]) >= 1:
+            score += 1
+        
+        # Disk space (2 points)
+        if free_gb >= 10:
+            score += 2
+        elif free_gb >= 5:
+            score += 1
+        
+        # ChromaDB backups (2 points)
+        if chromadb_backups >= 3:
+            score += 2
+        elif chromadb_backups >= 1:
+            score += 1
+        
+        # Scripts available (2 points)
+        if recovery_script.exists() and check_script.exists():
+            score += 2
+        elif recovery_script.exists() or check_script.exists():
+            score += 1
+        
+        # Scheduler running (1 point)
+        if sqlite_status.get("scheduler_running"):
+            score += 1
+        
+        # Determine readiness level
+        if score >= 8:
+            readiness = "excellent"
+        elif score >= 6:
+            readiness = "good"
+        elif score >= 4:
+            readiness = "fair"
+        else:
+            readiness = "poor"
+        
+        return {
+            "readiness_score": f"{score}/{max_score}",
+            "readiness_level": readiness,
+            "sqlite_backups": sqlite_status.get("total_backups", 0),
+            "chromadb_backups": chromadb_backups,
+            "recent_successful_backups": len([b for b in recent_backups if b.get("status") == "completed"]),
+            "free_disk_space_gb": free_gb,
+            "scheduler_running": sqlite_status.get("scheduler_running", False),
+            "recovery_scripts_available": {
+                "disaster_recovery": recovery_script.exists(),
+                "backup_check": check_script.exists()
+            },
+            "recommendations": [
+                "Ensure at least 3 recent successful backups" if len([b for b in recent_backups if b.get("status") == "completed"]) < 3 else None,
+                "Free up disk space (minimum 10GB recommended)" if free_gb < 10 else None,
+                "Enable backup scheduler" if not sqlite_status.get("scheduler_running") else None,
+                "Create ChromaDB backups" if chromadb_backups == 0 else None
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get disaster recovery status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get disaster recovery status: {str(e)}")
+
+
+# Database Consistency Check endpoints
+@router.get("/consistency/check")
+async def run_consistency_check(user: AdminUser = Depends(require_auth)):
+    """Run full database consistency check"""
+    try:
+        from consistency_check import get_consistency_checker
+        
+        checker = get_consistency_checker()
+        results = checker.run_full_consistency_check()
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Consistency check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Consistency check failed: {str(e)}")
+
+
+@router.get("/consistency/summary")
+async def get_consistency_summary(user: AdminUser = Depends(require_auth)):
+    """Get quick consistency summary"""
+    try:
+        from consistency_check import get_consistency_checker
+        
+        checker = get_consistency_checker()
+        summary = checker.get_consistency_summary()
+        
+        return summary
+        
+    except Exception as e:
+        logger.error(f"Failed to get consistency summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get consistency summary: {str(e)}")
+
+
+@router.post("/consistency/fix")
+async def fix_consistency_issues(
+    issue_types: List[str] = None,
+    user: AdminUser = Depends(require_auth)
+):
+    """Automatically fix consistency issues"""
+    try:
+        # Only superusers can fix issues
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only superusers can fix consistency issues")
+        
+        from consistency_check import get_consistency_checker, ConsistencyIssueType
+        
+        checker = get_consistency_checker()
+        
+        # Convert string issue types to enum
+        fix_types = None
+        if issue_types:
+            try:
+                fix_types = [ConsistencyIssueType(issue_type) for issue_type in issue_types]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid issue type: {str(e)}")
+        
+        results = checker.auto_fix_issues(fix_types)
+        
+        return results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fix consistency issues: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fix issues: {str(e)}")
+
+
+@router.get("/consistency", response_class=HTMLResponse)
+async def consistency_management_page(request: Request, user: AdminUser = Depends(require_auth)):
+    """Database consistency management page"""
+    try:
+        from consistency_check import get_consistency_checker
+        
+        checker = get_consistency_checker()
+        summary = checker.get_consistency_summary()
+        
+        return templates.TemplateResponse(
+            "consistency_management.html",
+            {
+                "request": request,
+                "user": user,
+                "consistency_summary": summary,
+                "version": "v0.1.12"
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "consistency_management.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading consistency management: {str(e)}",
+                "version": "v0.1.12"
+            }
+        )
+
+
 # Root redirect
 @router.get("/", response_class=HTMLResponse)
 async def admin_root(request: Request):

@@ -109,6 +109,21 @@
                             </a>
                         </li>
                         
+                        <!-- v0.1.12 Backup Management -->
+                        <li class="nav-item">
+                            <hr class="dropdown-divider my-2">
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'backup' in request.url.path %}active{% endif %}" href="/admin/backup">
+                                <i class="fas fa-save me-2"></i>Backup Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'consistency' in request.url.path %}active{% endif %}" href="/admin/consistency">
+                                <i class="fas fa-balance-scale me-2"></i>Data Consistency
+                            </a>
+                        </li>
+                        
                         {% if user.is_superuser %}
                         <li class="nav-item">
                             <hr class="dropdown-divider my-2">
