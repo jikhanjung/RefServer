@@ -94,7 +94,11 @@ class PaleontologyPaperGenerator:
                         print(f"⚠️ {lang} 폰트 로드 실패: {e}")
                         self.fonts_loaded[lang] = 'Helvetica'
                 else:
+                    print(f"⚠️ {lang} 폰트 파일을 찾을 수 없음: {font_path}")
                     self.fonts_loaded[lang] = 'Helvetica'
+            
+            # 로드된 폰트 상태 출력
+            print(f"📄 언어: {self.language}, 사용할 폰트: {self._get_font_name()}")
                     
         except Exception as e:
             print(f"⚠️ 폰트 설정 중 오류: {e}")
@@ -1023,7 +1027,56 @@ class PaleontologyPaperGenerator:
             }
         }
         
-        return texts_database.get(paper_type, texts_database["theropod"]).get(self.language, texts_database.get(paper_type, texts_database["theropod"])["en"])
+        # 논문 유형별 텍스트 가져오기
+        paper_texts = texts_database.get(paper_type, texts_database["theropod"])
+        
+        # 언어별 텍스트 가져오기, 없으면 영어로 폴백
+        if self.language in paper_texts:
+            return paper_texts[self.language]
+        else:
+            # CJK 언어인데 해당 언어 텍스트가 없으면 기본 번역 제공
+            if self.language in ["ko", "jp", "zh"]:
+                return self._create_basic_cjk_translation(paper_texts["en"], self.language)
+            else:
+                return paper_texts["en"]
+    
+    def _create_basic_cjk_translation(self, en_texts, language):
+        """CJK 언어를 위한 기본 번역 제공"""
+        translations = {
+            "ko": {
+                "intro_title": "1. 서론",
+                "methods_title": "2. 재료 및 방법", 
+                "results_title": "3. 결과",
+                "discussion_title": "4. 토론",
+                "conclusions_title": "5. 결론"
+            },
+            "jp": {
+                "intro_title": "1. はじめに",
+                "methods_title": "2. 材料と方法",
+                "results_title": "3. 結果", 
+                "discussion_title": "4. 考察",
+                "conclusions_title": "5. 結論"
+            },
+            "zh": {
+                "intro_title": "1. 引言",
+                "methods_title": "2. 材料与方法",
+                "results_title": "3. 结果",
+                "discussion_title": "4. 讨论", 
+                "conclusions_title": "5. 结论"
+            }
+        }
+        
+        # 기본 번역된 섹션 제목과 영어 텍스트 조합
+        result = translations[language].copy()
+        result.update({
+            "intro_text": en_texts["intro_text"],
+            "methods_text": en_texts["methods_text"], 
+            "results_text": en_texts["results_text"],
+            "discussion_text": en_texts["discussion_text"],
+            "conclusions_text": en_texts["conclusions_text"]
+        })
+        
+        return result
     
     def _create_theropod_content(self):
         """수각류 공룡 논문 내용"""
