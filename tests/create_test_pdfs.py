@@ -683,12 +683,12 @@ class PaleontologyPaperGenerator:
         # 첫 페이지: 제목 페이지 내용 (단일 컬럼 프레임에 배치)
         story.extend(self._create_title_page())
         
-        # 첫 페이지 하단에서 본문 시작 (2단 프레임으로 자동 이동)
-        story.extend(self._create_body_content())
-        
-        # 2페이지부터는 일반 2단 템플릿 사용
+        # 2페이지부터는 일반 2단 템플릿 사용하도록 미리 설정
         story.append(NextPageTemplate('two_column'))
-        story.append(PageBreak())
+        
+        # 첫 페이지 하단에서 본문 시작 (2단 프레임으로 자동 이동)
+        # 본문이 넘치면 자동으로 2페이지가 되며, 이때 two_column 템플릿 적용
+        story.extend(self._create_body_content())
         
         # 2페이지 이후 추가 내용
         story.extend(self._create_additional_content())
