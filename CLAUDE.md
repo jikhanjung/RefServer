@@ -190,6 +190,17 @@ RefServer/
 
 ### 🧪 테스트 및 배포 도구 - ✅ 완료
 - [x] `test_api.py`: 전체 API 자동 테스트 스크립트
+- [x] `test_api_core.py`: 핵심 PDF 처리 테스트 (업로드, OCR, 임베딩, 메타데이터)
+- [x] `test_backup_system.py`: 백업, 일관성 검증, 재해 복구 테스트 (v0.1.12)
+- [x] `test_admin_system.py`: 관리자 인터페이스 및 권한 관리 테스트 (v0.1.12)
+- [x] `test_ocr_language_detection.py`: 하이브리드 언어 감지 OCR 테스트
+- [x] **`create_test_pdfs.py`: 종합 테스트용 PDF 생성기** ⭐
+    - **10가지 고생물학 논문 유형**: theropod, trilobite, marine_reptile, plant_fossil, mass_extinction, mammal_evolution, trace_fossil, amber_inclusion, microorganism, taphonomy
+    - **4개 언어 지원**: 영어, 한국어, 일본어, 중국어 (CJK 폰트 완벽 지원)
+    - **복합 레이아웃**: 첫 페이지 1컬럼(초록까지) + 2컬럼(본문) 혼합 구조
+    - **텍스트 레이어 제어**: 일반 PDF + OCR 테스트용 텍스트 레이어 없는 PDF
+    - **총 22개 PDF 파일 생성**: 언어별, 유형별, 텍스트 레이어 유무별 조합
+    - **현실적인 학술 내용**: 완전한 Introduction + Methods + Results + Discussion + Conclusions 구조
 - [x] `download_model.py`: BGE-M3 모델 로컬 다운로드
 - [x] `migrate.py`: 데이터베이스 마이그레이션 유틸리티
 
@@ -318,11 +329,73 @@ python test_api.py --pdf /path/to/paper.pdf
 
 ---
 
+## 🧪 테스트용 PDF 생성 및 실행
+
+### 테스트용 PDF 생성
+
+RefServer는 종합적인 테스트를 위한 고품질 테스트 PDF 생성기를 제공합니다:
+
+```bash
+# 전체 테스트 PDF 생성 (22개 파일)
+cd tests
+python create_test_pdfs.py --multiple
+
+# 특정 유형의 PDF 생성
+python create_test_pdfs.py --type theropod --language ko --output tests/test_papers
+
+# 텍스트 레이어 없는 PDF 생성 (OCR 테스트용)
+python create_test_pdfs.py --type marine_reptile --language en --no-text
+```
+
+### 생성되는 테스트 파일
+
+**📄 텍스트 레이어 있는 PDF (일반 처리용)**:
+- `paleontology_paper_ko.pdf`, `paleontology_paper_zh.pdf`
+- `paleontology_theropod_en.pdf`, `paleontology_trilobite_en.pdf` 등
+- `trilobite_paper_en.pdf`, `trilobite_paper_jp.pdf`
+
+**🔍 텍스트 레이어 없는 PDF (OCR 테스트용)**:
+- `paleontology_paper_en_no_text.pdf`, `paleontology_paper_jp_no_text.pdf`
+- `paleontology_marine_reptile_en_no_text.pdf`, `paleontology_mass_extinction_en_no_text.pdf`
+- `trilobite_paper_ko_no_text.pdf`, `trilobite_paper_zh_no_text.pdf`
+
+### 전체 테스트 실행
+
+```bash
+# 모든 테스트 스크립트 실행
+cd tests
+python test_api_core.py              # 핵심 PDF 처리 테스트
+python test_backup_system.py         # 백업 시스템 테스트
+python test_admin_system.py          # 관리자 시스템 테스트
+python test_ocr_language_detection.py # 언어 감지 OCR 테스트
+
+# 생성된 테스트 PDF로 전체 API 테스트
+python test_api.py
+```
+
+### PDF 생성기 의존성
+
+텍스트 레이어 제거 기능을 위해 추가 패키지가 필요합니다:
+
+```bash
+# 필수: 텍스트 레이어 제거용
+pip install pdf2image pillow
+
+# Linux: poppler-utils 설치 필요
+sudo apt-get install poppler-utils
+
+# macOS: poppler 설치 필요
+brew install poppler
+```
+
+---
+
 ## 📄 문서화
 
 프로젝트의 상세한 변경 내역과 향후 개발 계획은 별도 문서로 관리됩니다:
 
 - **[CHANGELOG.md](./CHANGELOG.md)**: 모든 버전별 상세 변경 내역
 - **[ROADMAP.md](./ROADMAP.md)**: 향후 개발 계획 및 로드맵
+- **[tests/TESTING_GUIDE.md](./tests/TESTING_GUIDE.md)**: 종합 테스트 가이드 및 성공 기준
 
-현재 상태: **v0.1.12** - 엔터프라이즈급 백업 시스템, 재해 복구, 데이터베이스 일관성 검증 완비
+현재 상태: **v0.1.12** - 엔터프라이즈급 백업 시스템, 재해 복구, 데이터베이스 일관성 검증, 종합 테스트 PDF 생성기 완비
