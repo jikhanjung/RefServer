@@ -739,9 +739,10 @@ class PaleontologyPaperGenerator:
                 image.save(img_buffer, format='JPEG', quality=85)
                 img_buffer.seek(0)
                 
-                # PDF 페이지에 이미지 추가
+                # PDF 페이지에 이미지 추가 (ImageReader 사용)
+                from reportlab.lib.utils import ImageReader
                 page_width, page_height = A4
-                c.drawImage(img_buffer, 0, 0, width=page_width, height=page_height)
+                c.drawImage(ImageReader(img_buffer), 0, 0, width=page_width, height=page_height)
                 
                 if i < len(images) - 1:
                     c.showPage()
@@ -759,6 +760,11 @@ class PaleontologyPaperGenerator:
             print(f"   💡 실제 텍스트 레이어 제거를 위해서는 'pip install pdf2image pillow' 실행")
         except Exception as e:
             print(f"   ⚠️ 텍스트 레이어 제거 실패: {e}")
+            print(f"   💡 poppler 설치가 필요합니다:")
+            print(f"   - Windows: https://github.com/oschwartz10612/poppler-windows/releases/")
+            print(f"   - macOS: brew install poppler")
+            print(f"   - Linux: sudo apt-get install poppler-utils")
+            print(f"   📝 텍스트 레이어 제거 없이 계속 진행됩니다.")
     
     def _create_title_page(self):
         """제목 페이지 생성 (단일 컬럼)"""
