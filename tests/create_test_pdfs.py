@@ -173,10 +173,10 @@ class PaleontologyPaperGenerator:
                 name='BodyText',
                 parent=self.styles['Normal'],
                 fontName=font_name,
-                fontSize=9,
+                fontSize=10,
                 alignment=TA_JUSTIFY,
-                spaceAfter=8,
-                leading=11
+                spaceAfter=10,
+                leading=13
             ))
         
         if 'SectionHeader' not in self.styles:
