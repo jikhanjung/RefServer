@@ -243,10 +243,16 @@ docker-compose -f docker-compose.cpu.yml up --build
 pip install -r requirements-test.txt
 
 # 전체 API 자동 테스트
-python test_api.py
+python tests/test_api.py
+
+# 핵심 API 테스트
+python tests/test_api_core.py
+
+# 백업 시스템 테스트
+python tests/test_backup_system.py
 
 # 특정 PDF 파일로 테스트
-python test_api.py --pdf /path/to/paper.pdf
+python tests/test_api_core.py --pdf /path/to/paper.pdf
 ```
 
 ### 4. 관리자 계정 설정
@@ -276,39 +282,37 @@ docker exec -it refserver python manage_admin.py deactivate oldadmin
 - Swagger UI: http://localhost:8060/docs
 - ReDoc: http://localhost:8060/redoc
 
-### 7. v0.1.9 엔터프라이즈 기능 테스트
+### 7. v0.1.12 종합 기능 테스트
 ```bash
-# 자동화된 종합 테스트 (9개 카테고리)
-python test_v019_features.py
+# 자동화된 종합 테스트 (v0.1.12)
+python tests/test_api.py
 
 # 예상 결과:
-📊 Tests: 9/9 passed
-📈 Success Rate: 100.0%
-🏆 Overall: PASS
+📊 Tests: 25+ passed
+📈 Success Rate: 90%+
+🏆 Overall: PASS (v0.1.12 features)
 
-🔧 Feature Status:
-   ✅ Async Error Handling
-   ✅ Performance Monitoring
-   ✅ Queue Management
-   ✅ Concurrent Processing
-   ✅ Priority Queue
-   ✅ System Metrics
-   ✅ Export Functionality
-   ✅ Security Validation
+🔧 v0.1.12 Features:
+   ✅ Enterprise Backup System
+   ✅ Database Consistency Verification
+   ✅ Disaster Recovery System
+   ✅ Automated Backup Scheduling
+   ✅ Point-in-Time Recovery
+   ✅ Real-time Health Monitoring
+   ✅ Vector Database Integration
+   ✅ Duplicate Prevention
 
 💡 Recommendations:
-   • All v0.1.9 features are working correctly!
+   • All v0.1.12 features are working correctly!
 ```
 
-**v0.1.9 검증 완료된 엔터프라이즈 기능:**
-- ✅ **에러 핸들링**: 회로 차단기, 재시도 메커니즘, 복구 로직
-- ✅ **성능 모니터링**: 실시간 메트릭, 성능 분석, 데이터 내보내기
-- ✅ **큐 관리 시스템**: 4단계 우선순위, 동시 처리 제한, Job 취소
-- ✅ **보안 시스템**: 파일 검증, 크기 제한, 속도 제한, 악성 파일 차단
-- ✅ **모니터링 대시보드**: 성능/큐/시스템 실시간 UI
-- ✅ **시스템 메트릭**: CPU/메모리/디스크 모니터링
-- ✅ **데이터 내보내기**: JSON/CSV 형식 성능 데이터 내보내기
-- ✅ **PDF 업로드 및 전체 파이프라인 처리**
+**v0.1.12 검증 완료된 엔터프라이즈 기능:**
+- ✅ **백업 시스템**: 자동 스케줄링, SQLite+ChromaDB 통합 백업, 압축 저장
+- ✅ **일관성 검증**: 7가지 문제 유형 자동 감지, 안전한 자동 수정
+- ✅ **재해 복구**: Point-in-Time Recovery, RTO 2시간, RPO 1시간
+- ✅ **모니터링**: 실시간 백업 상태, 건강도 체크, 자동 알림
+- ✅ **벡터 검색**: ChromaDB 기반 유사 논문 검색, 4층 중복 방지
+- ✅ **관리자 인터페이스**: 백업 관리, 일관성 체크, 시스템 모니터링 UI
 - ✅ **OCR + 10개 언어 자동 감지**
 - ✅ **BGE-M3 임베딩 생성 (1024차원)**
 - ✅ **Huridocs 레이아웃 분석**
@@ -451,7 +455,13 @@ RefServer/ (v0.1.7 완전 구현)
 ├── 📦 Dockerfile               # 컨테이너 이미지 정의
 ├── 📋 requirements.txt         # Python 의존성 (aioredis 제거)
 ├── 📋 requirements-test.txt    # 테스트 의존성
-├── 🧪 test_api.py             # 환경 적응형 API 테스트 스크립트 ✅
+├── 🧪 tests/                  # 종합 테스트 스위트 ✅
+│   ├── test_api.py             # 환경 적응형 통합 API 테스트
+│   ├── test_api_core.py        # 핵심 PDF 처리 API 테스트
+│   ├── test_admin_system.py    # 관리자 시스템 테스트 (v0.1.12)
+│   ├── test_backup_system.py   # 백업 시스템 테스트 (v0.1.12)
+│   ├── test_ocr_language_detection.py # OCR 언어 감지 테스트
+│   └── README.md              # 테스트 가이드
 ├── 📥 download_model.py        # BGE-M3 모델 다운로드 ✅
 ├── 🔄 migrate.py              # 데이터베이스 마이그레이션 ✅
 ├── 📁 app/                    # 핵심 애플리케이션 (11개 모듈)
@@ -656,7 +666,7 @@ print(get_version_info())   # 상세 정보
 curl http://localhost:8060/status | jq '.version'
 
 # 전체 상태 및 버전 정보
-python test_version_api.py
+python tests/test_api.py
 ```
 
 ## 🐳 Docker 이미지 빌드
@@ -701,13 +711,19 @@ docker run -d -p 8060:8000 -v ./data:/data honestjung/refserver:latest
 ### 자동화된 테스트 스크립트
 ```bash
 # 전체 API 자동 테스트 (12개 엔드포인트)
-python test_api.py
+python tests/test_api.py
+
+# 핵심 API 테스트
+python tests/test_api_core.py
+
+# 백업 시스템 테스트
+python tests/test_backup_system.py
 
 # 특정 PDF 파일로 테스트
-python test_api.py --pdf /path/to/paper.pdf
+python tests/test_api_core.py --pdf /path/to/paper.pdf
 
 # 원격 서버 테스트
-python test_api.py --url http://server:8060
+python tests/test_api.py --url http://server:8060
 ```
 
 ### 테스트 결과 예시
@@ -748,7 +764,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### 종합 테스트
 ```bash
 # 전체 API 테스트
-python test_api.py --url http://localhost:8060
+python tests/test_api.py --url http://localhost:8060
 
 # 상세한 테스트 가이드
 # API_TESTING_GUIDE.md 참조
@@ -770,7 +786,7 @@ python test_api.py --url http://localhost:8060
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Run tests (`python test_api.py`)
+3. Run tests (`python tests/test_api.py`)
 4. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 5. Push to the branch (`git push origin feature/AmazingFeature`)
 6. Open a Pull Request

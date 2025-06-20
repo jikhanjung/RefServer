@@ -1,16 +1,16 @@
-# RefServer API 테스트 가이드 (v0.1.7)
+# RefServer 종합 테스트 가이드 (v0.1.12)
 
-RefServer API의 모든 엔드포인트를 자동으로 테스트하고 검증하는 종합 가이드입니다.
-**환경 적응형 테스트 + 비동기 처리 시스템** - GPU/CPU 환경 자동 감지 + 새로운 업로드/폴링 워크플로우 지원
+RefServer의 모든 기능을 자동으로 테스트하고 검증하는 종합 가이드입니다.
+**API + 백업 시스템 + 일관성 검증 + 관리자 시스템** - GPU/CPU 환경 자동 감지 + v0.1.12 엔터프라이즈 기능 전체 지원
 
 ## 📋 목차
 
 - [개요](#개요)
-- [테스트 스크립트 설치](#테스트-스크립트-설치)
-- [기본 사용법](#기본-사용법)
-- [고급 사용법](#고급-사용법)
-- [테스트 시나리오](#테스트-시나리오)
+- [자동화 테스트](#자동화-테스트)
+- [수동 테스트 방법](#수동-테스트-방법)
+- [성공 기준](#성공-기준)
 - [예상 결과](#예상-결과)
+- [고급 테스트 시나리오](#고급-테스트-시나리오)
 - [트러블슈팅](#트러블슈팅)
 
 ---
@@ -52,157 +52,31 @@ RefServer API의 모든 엔드포인트를 자동으로 테스트하고 검증�
 
 ---
 
-## 테스트 스크립트 설치
+## 자동화 테스트
 
-### 1. 의존성 설치
+RefServer는 5개의 전문화된 테스트 스크립트를 제공합니다. 기본 설치 및 실행 방법은 [README.md](./README.md)를 참조하세요.
+
+### 테스트 스크립트 개요
+- **test_api_core.py**: 핵심 PDF 처리 (업로드, OCR, 임베딩, 메타데이터)
+- **test_backup_system.py**: 백업, 일관성 검증, 재해 복구 (v0.1.12)
+- **test_admin_system.py**: 관리자 인터페이스 및 권한 관리 (v0.1.12)
+- **test_api.py**: 전체 API 엔드포인트 통합 테스트
+- **test_ocr_language_detection.py**: 하이브리드 언어 감지 OCR
+
+### 고급 테스트 옵션
 ```bash
-# 테스트 전용 의존성 설치
-pip install -r requirements-test.txt
+# 특정 PDF 파일로 테스트
+python test_api_core.py --pdf /path/to/complex_paper.pdf
 
-# 또는 개별 설치
-pip install requests reportlab
-```
+# 원격 서버 테스트
+python test_backup_system.py --url http://production-server:8060
 
-### 2. 실행 권한 부여
-```bash
-chmod +x test_api.py
-```
-
-### 3. RefServer 실행 확인
-```bash
-# Docker Compose로 RefServer 실행
-docker-compose up -d
-
-# 서버 상태 확인 (수동)
-curl http://localhost:8060/health
-```
+# 상세 로그 모드
+python test_admin_system.py --username admin --password secret --verbose
 
 ---
 
-## 기본 사용법
-
-### 🚀 빠른 테스트
-```bash
-# 기본 테스트 실행 (localhost:8060)
-python test_api.py
-```
-
-### 📊 실행 결과 예시
-```
-[12:34:56] INFO: 🚀 Starting RefServer API Tests
-[12:34:56] INFO: ==================================================
-[12:34:56] INFO: Testing health check endpoint...
-[12:34:56] PASS: ✅ Health Check - PASSED (200)
-[12:34:56] INFO:    Service status: healthy
-
-[12:34:57] INFO: Testing service status endpoint...
-[12:34:57] PASS: ✅ Service Status - PASSED (200)
-[12:34:57] INFO:    Database: ✅
-[12:34:57] INFO:    Quality Assessment (GPU): ✅  
-[12:34:57] INFO:    Layout Analysis (GPU): ✅
-[12:34:57] INFO:    Metadata Extraction (CPU): ✅
-[12:34:57] INFO:    🎮 GPU Mode: All services available
-
-[12:34:58] INFO: 
-
-[12:34:58] INFO: 📤 Testing Async PDF Processing Workflow
-[12:34:58] INFO: Testing PDF upload endpoint...
-[12:34:58] INFO:    Created test PDF: /tmp/test_paper.pdf
-[12:34:58] INFO:    Uploading PDF: test_paper.pdf
-[12:34:59] PASS: ✅ PDF Upload - PASSED (200)
-[12:34:59] INFO:    Job ID: abc-123-def-456
-[12:34:59] INFO:    Status: uploaded
-[12:34:59] INFO:    Upload time: 0.85s
-[12:34:59] INFO:    Message: PDF uploaded successfully
-
-[12:34:59] INFO: Testing job status polling for job: abc-123-def-456
-[12:35:01] PASS: ✅ Job Status - PASSED (200)
-[12:35:01] INFO:    Progress: 20% - ocr_processing
-[12:35:03] PASS: ✅ Job Status - PASSED (200)
-[12:35:03] INFO:    Progress: 45% - quality_assessment
-[12:35:05] PASS: ✅ Job Status - PASSED (200)
-[12:35:05] INFO:    Progress: 67% - embedding_generation
-[12:35:07] PASS: ✅ Job Status - PASSED (200)
-[12:35:07] INFO:    Progress: 85% - layout_analysis
-[12:35:09] PASS: ✅ Job Status - PASSED (200)
-[12:35:09] INFO:    ✅ Processing completed in 10.23s
-[12:35:09] INFO:    Document ID: 550e8400-e29b-41d4-a716-446655440000
-
-[12:35:10] INFO: 
-
-[12:35:10] INFO: 🔄 Testing Legacy Synchronous Processing
-[12:35:42] INFO:    Success: True
-[12:35:42] INFO:    Processing time: 45.23s
-[12:35:42] INFO:    Steps completed: 6
-[12:35:42] INFO:    Steps failed: 0
-[12:35:42] INFO:    Using doc_id 550e8400-e29b-41d4-a716-446655440000 for subsequent tests
-
-[12:35:43] INFO: Testing paper info endpoint...
-[12:35:43] PASS: ✅ Paper Info - PASSED (200)
-[12:35:43] INFO:    Filename: test.pdf
-[12:35:43] INFO:    OCR Quality: good|score:75|confidence:85
-[12:35:43] INFO:    Text length: 156
-
-[12:35:44] INFO: Testing metadata endpoint...
-[12:35:44] PASS: ✅ Metadata - PASSED (200)
-[12:35:44] INFO:    Title: Test Academic Paper
-[12:35:44] INFO:    Authors: 2 found
-[12:35:44] INFO:    Year: 2024
-[12:35:44] INFO:    Journal: Test Journal of Computer Science
-
-[12:36:15] INFO: ==================================================
-[12:36:15] INFO: 📊 Test Summary
-[12:36:15] INFO:    Total tests: 12
-[12:36:15] INFO:    Passed: 11 ✅
-[12:36:15] INFO:    Failed: 1 ❌
-[12:36:15] INFO:    Success rate: 91.7%
-[12:36:15] INFO:    Total time: 78.45s
-[12:36:15] INFO:    Test document ID: 550e8400-e29b-41d4-a716-446655440000
-```
-
----
-
-## 고급 사용법
-
-### 🔧 커스텀 서버 URL
-```bash
-# 다른 서버에서 실행 중인 RefServer 테스트
-python test_api.py --url http://192.168.1.100:8060
-
-# 포트가 다른 경우
-python test_api.py --url http://localhost:9000
-```
-
-### 📄 특정 PDF 파일 사용
-```bash
-# 실제 학술 논문으로 테스트
-python test_api.py --pdf /path/to/research_paper.pdf
-
-# 복잡한 PDF로 성능 테스트
-python test_api.py --pdf /path/to/complex_document.pdf
-```
-
-### ⏱️ 타임아웃 설정
-```bash
-# 큰 PDF 파일을 위한 긴 타임아웃 (120초)
-python test_api.py --timeout 120
-
-# 빠른 테스트를 위한 짧은 타임아웃 (10초)
-python test_api.py --timeout 10
-```
-
-### 🔄 조합 사용 예시
-```bash
-# 원격 서버의 실제 PDF로 종합 테스트
-python test_api.py \
-  --url http://production-server:8060 \
-  --pdf /data/papers/nature_2024.pdf \
-  --timeout 180
-```
-
----
-
-## 테스트 시나리오
+## 고급 테스트 시나리오
 
 ### 🧪 시나리오 1: GPU 환경 전체 기능 테스트
 **목적**: GPU 가속 기능을 포함한 모든 기능 검증
@@ -538,4 +412,145 @@ docker network inspect refserver_default
 
 ---
 
-**RefServer API Testing Guide v0.1.7** - 환경 적응형 테스트 + 비동기 처리 시스템 포함 완전한 API 테스트 및 검증 가이드 ✅
+## 🔧 수동 테스트 방법
+
+### 1. 백업 시스템 API 테스트 (v0.1.12)
+
+#### a) 백업 상태 확인
+```bash
+curl http://localhost:8060/admin/backup/status
+```
+
+#### b) 수동 백업 트리거
+```bash
+# SQLite 백업
+curl -X POST -d "backup_type=snapshot&compress=true" \
+     http://localhost:8060/admin/backup/trigger
+
+# 통합 백업 (SQLite + ChromaDB)
+curl -X POST -d "backup_type=snapshot&unified=true" \
+     http://localhost:8060/admin/backup/trigger
+```
+
+#### c) 백업 검증
+```bash
+curl -X POST http://localhost:8060/admin/backup/verify/BACKUP_ID
+```
+
+### 2. 일관성 검증 API 테스트
+
+#### a) 일관성 요약 확인
+```bash
+curl http://localhost:8060/admin/consistency/summary
+```
+
+#### b) 전체 일관성 검사
+```bash
+curl http://localhost:8060/admin/consistency/check
+```
+
+#### c) 자동 수정 (superuser 권한 필요)
+```bash
+curl -X POST http://localhost:8060/admin/consistency/fix
+```
+
+### 3. 재해 복구 시스템 테스트
+
+#### a) 재해 복구 준비도 확인
+```bash
+curl http://localhost:8060/admin/disaster-recovery/status
+```
+
+### 4. 벡터 검색 API 테스트 (v0.1.10+)
+
+#### a) 유사 문서 검색
+```bash
+curl http://localhost:8060/similar/PAPER_ID
+```
+
+#### b) 벡터 데이터베이스 통계
+```bash
+curl http://localhost:8060/vector/stats
+```
+
+### 5. 에러 핸들링 테스트
+
+#### a) 잘못된 파일 업로드
+```bash
+# PDF가 아닌 파일 업로드 시도
+curl -X POST -F "file=@not_a_pdf.txt" \
+     http://localhost:8060/upload
+# 예상 결과: 422 Unprocessable Entity
+```
+
+#### b) 대용량 파일 업로드 (크기 제한 확인)
+```bash
+# 100MB 이상의 대용량 파일 생성 및 업로드
+dd if=/dev/zero of=large_test.pdf bs=1M count=101
+curl -X POST -F "file=@large_test.pdf" \
+     http://localhost:8060/upload
+# 예상 결과: 413 Payload Too Large
+```
+
+---
+
+## 📈 성공 기준
+
+### 1. 테스트 통과 기준
+
+#### GPU 모드 (전체 기능)
+- **전체 테스트 성공률**: 90% 이상
+- **핵심 기능**: OCR, 품질 평가, 레이아웃 분석, 메타데이터 추출 모두 정상
+- **백업 시스템**: SQLite, ChromaDB, 통합 백업 모두 성공
+- **일관성 검증**: 7가지 문제 유형 감지 및 수정 정상
+
+#### CPU 모드 (핵심 기능)
+- **전체 테스트 성공률**: 75% 이상
+- **제한된 서비스**: 기본 OCR, 규칙 기반 메타데이터만 활성화
+- **백업 시스템**: SQLite 백업 정상 (ChromaDB 제외)
+
+#### 백업 시스템 (v0.1.12)
+- **백업 생성**: SQLite, ChromaDB, 통합 백업 모두 성공
+- **백업 검증**: 무결성 검사 통과
+- **일관성 검사**: 7가지 문제 유형 정확 감지
+- **재해 복구**: 준비도 점수 8/10 이상
+
+### 2. 성능 기준
+
+#### API 응답 시간
+- **업로드 API**: 1초 미만 (즉시 job_id 반환)
+- **상태 조회**: 100ms 미만
+- **백업 트리거**: 5초 미만 (백그라운드 실행)
+
+#### 처리 성능
+- **PDF 처리**: 중간 크기 문서(10페이지) 3분 이내
+- **백업 생성**: SQLite 30초, ChromaDB 60초 이내
+- **일관성 검사**: 1000개 논문 기준 30초 이내
+
+### 3. 안정성 기준
+
+#### 에러 핸들링
+- **잘못된 입력**: 적절한 4xx 에러 응답
+- **서버 오류**: 5xx 에러 시 상세 로그 기록
+- **백업 실패**: 실패 시 안전한 롤백
+
+#### 자동 복구
+- **일시적 문제**: 네트워크 오류 시 자동 재시도
+- **일관성 문제**: 안전한 범위 내 자동 수정
+- **백업 스케줄**: 자동 백업 스케줄링 정상 작동
+
+### 4. 데이터 무결성 기준 (v0.1.12)
+
+#### 백업 무결성
+- **백업 검증**: SHA-256 체크섬 일치 100%
+- **압축 무결성**: gzip 압축/해제 오류 없음
+- **메타데이터**: 백업 메타정보 정확성
+
+#### 일관성 검증
+- **SQLite ↔ ChromaDB**: 논문 수 일치
+- **임베딩 무결성**: 벡터 데이터 정합성
+- **중복 감지**: 4층 중복 방지 시스템 정상
+
+---
+
+**RefServer 종합 테스트 가이드 v0.1.12** - 환경 적응형 테스트 + 백업 시스템 + 일관성 검증 + 관리자 시스템 포함 완전한 테스트 및 검증 가이드 ✅

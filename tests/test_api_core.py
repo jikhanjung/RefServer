@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RefServer API 테스트 스크립트 (v0.1.7)
-환경 적응형 테스트 + 비동기 처리 API 포함 모든 엔드포인트를 테스트하고 결과를 확인합니다.
+RefServer Core API 테스트 스크립트 (v0.1.12)
+PDF 처리 관련 핵심 API 기능을 테스트합니다.
 """
 
 import requests
@@ -13,10 +13,10 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 
-class RefServerAPITester:
+class RefServerCoreAPITester:
     def __init__(self, base_url: str = "http://localhost:8060"):
         """
-        Initialize API tester
+        Initialize Core API tester
         
         Args:
             base_url: RefServer API base URL
@@ -24,7 +24,7 @@ class RefServerAPITester:
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'RefServer-API-Tester/1.0'
+            'User-Agent': 'RefServer-Core-API-Tester/1.0'
         })
         
         # Test results
@@ -103,6 +103,7 @@ class RefServerAPITester:
             if success:
                 data = response.json()
                 self.log(f"   Database: {'✅' if data.get('database') else '❌'}")
+                self.log(f"   Version: {data.get('version', 'Unknown')}")
                 
                 # GPU-dependent services
                 quality_assessment = data.get('quality_assessment')
@@ -114,6 +115,12 @@ class RefServerAPITester:
                 # CPU-compatible services
                 metadata_extraction = data.get('metadata_extraction')
                 self.log(f"   Metadata Extraction (CPU): {'✅' if metadata_extraction else '❌'}")
+                
+                # v0.1.12 New services
+                backup_system = data.get('backup_system')
+                consistency_check = data.get('consistency_check')
+                self.log(f"   Backup System (v0.1.12): {'✅' if backup_system else '❌'}")
+                self.log(f"   Consistency Check (v0.1.12): {'✅' if consistency_check else '❌'}")
                 
                 # Determine deployment mode
                 if quality_assessment and layout_analysis:
@@ -130,7 +137,9 @@ class RefServerAPITester:
                 self.service_status = {
                     'quality_assessment': quality_assessment,
                     'layout_analysis': layout_analysis,
-                    'metadata_extraction': metadata_extraction
+                    'metadata_extraction': metadata_extraction,
+                    'backup_system': backup_system,
+                    'consistency_check': consistency_check
                 }
             
         except Exception as e:
@@ -138,7 +147,7 @@ class RefServerAPITester:
             self.results['failed'] += 1
     
     def test_upload_pdf(self, pdf_path: str = None):
-        """Test PDF upload endpoint (new async API)"""
+        """Test PDF upload endpoint (async API)"""
         self.log("Testing PDF upload endpoint...")
         
         # Create a test PDF if none provided
@@ -253,62 +262,6 @@ class RefServerAPITester:
             self.results['failed'] += 1
             return None
     
-    def test_process_pdf_legacy(self, pdf_path: str = None):
-        """Test legacy PDF processing endpoint (for backward compatibility)"""
-        self.log("Testing legacy PDF processing endpoint...")
-        
-        # Create a test PDF if none provided
-        if not pdf_path:
-            pdf_path = self.create_test_pdf()
-        
-        if not pdf_path or not os.path.exists(pdf_path):
-            self.log("❌ No test PDF file available for legacy processing test", "ERROR")
-            self.results['failed'] += 1
-            return
-        
-        try:
-            with open(pdf_path, 'rb') as pdf_file:
-                files = {'file': ('test.pdf', pdf_file, 'application/pdf')}
-                
-                self.log(f"   Uploading PDF: {os.path.basename(pdf_path)}")
-                start_time = time.time()
-                
-                response = self.session.post(
-                    f"{self.base_url}/process",
-                    files=files,
-                    timeout=300  # 5 minute timeout for processing
-                )
-                
-                processing_time = time.time() - start_time
-                success = self.assert_response(response, 200, "Legacy PDF Processing")
-                
-                if success:
-                    data = response.json()
-                    doc_id = data.get('doc_id')
-                    
-                    self.log(f"   Document ID: {doc_id}")
-                    self.log(f"   Success: {data.get('success')}")
-                    self.log(f"   Processing time: {data.get('processing_time', 0):.2f}s")
-                    self.log(f"   Steps completed: {len(data.get('steps_completed', []))}")
-                    self.log(f"   Steps failed: {len(data.get('steps_failed', []))}")
-                    
-                    if data.get('warnings'):
-                        self.log(f"   Warnings: {len(data.get('warnings'))}")
-                        for warning in data.get('warnings', [])[:3]:  # Show first 3 warnings
-                            self.log(f"     - {warning}")
-                    
-                    # Store doc_id for subsequent tests if not already set
-                    if not self.test_doc_id and doc_id:
-                        self.test_doc_id = doc_id
-                        self.log(f"   Using doc_id {self.test_doc_id} for subsequent tests")
-        
-        except requests.Timeout:
-            self.log("❌ PDF processing timed out (5 minutes)", "ERROR")
-            self.results['failed'] += 1
-        except Exception as e:
-            self.log(f"PDF processing test failed: {e}", "ERROR")
-            self.results['failed'] += 1
-    
     def test_get_paper_info(self):
         """Test paper info endpoint"""
         if not self.test_doc_id:
@@ -317,9 +270,6 @@ class RefServerAPITester:
         
         self.log("Testing paper info endpoint...")
         
-        # Check if quality assessment is available
-        quality_assessment_available = self.service_status.get('quality_assessment', False)
-        
         try:
             response = self.session.get(f"{self.base_url}/paper/{self.test_doc_id}")
             success = self.assert_response(response, 200, "Paper Info")
@@ -327,20 +277,17 @@ class RefServerAPITester:
             if success:
                 data = response.json()
                 self.log(f"   Filename: {data.get('filename')}")
+                self.log(f"   Processing time: {data.get('processing_time', 0):.2f}s")
+                self.log(f"   Text length: {len(data.get('ocr_text', ''))}")
                 
+                # Check OCR quality based on service availability
                 ocr_quality = data.get('ocr_quality')
-                if quality_assessment_available and ocr_quality:
+                if self.service_status.get('quality_assessment') and ocr_quality:
                     self.log(f"   OCR Quality (LLaVA): {ocr_quality}")
-                    self.log(f"   ✅ GPU-based quality assessment available")
                 elif ocr_quality:
                     self.log(f"   OCR Quality (basic): {ocr_quality}")
-                    self.log(f"   ℹ️ Basic quality assessment (GPU unavailable)")
                 else:
                     self.log(f"   OCR Quality: Not assessed")
-                    if not quality_assessment_available:
-                        self.log(f"   ℹ️ Quality assessment unavailable in CPU mode")
-                
-                self.log(f"   Text length: {len(data.get('ocr_text', ''))}")
         
         except Exception as e:
             self.log(f"Paper info test failed: {e}", "ERROR")
@@ -354,35 +301,23 @@ class RefServerAPITester:
         
         self.log("Testing metadata endpoint...")
         
-        # Check deployment mode for metadata extraction expectations
-        metadata_expected = self.service_status.get('metadata_extraction', False)
-        
         try:
             response = self.session.get(f"{self.base_url}/metadata/{self.test_doc_id}")
+            success = self.assert_response(response, [200, 404], "Metadata")
             
-            if metadata_expected:
-                # LLM-based metadata extraction available
-                success = self.assert_response(response, [200, 404], "Metadata (LLM-based)")
-                if response.status_code == 200:
-                    data = response.json()
-                    self.log(f"   Title: {data.get('title', 'N/A')}")
-                    self.log(f"   Authors: {len(data.get('authors', []))} found")
-                    self.log(f"   Year: {data.get('year', 'N/A')}")
-                    self.log(f"   Journal: {data.get('journal', 'N/A')}")
+            if response.status_code == 200:
+                data = response.json()
+                self.log(f"   Title: {data.get('title', 'N/A')}")
+                self.log(f"   Authors: {len(data.get('authors', []))} found")
+                self.log(f"   Year: {data.get('year', 'N/A')}")
+                self.log(f"   Journal: {data.get('journal', 'N/A')}")
+                
+                if self.service_status.get('metadata_extraction'):
                     self.log(f"   ✅ LLM-based extraction successful")
-                elif response.status_code == 404:
-                    self.log("   No metadata found (LLM processing may have failed)")
+                else:
+                    self.log(f"   ✅ Rule-based extraction working")
             else:
-                # Fallback to rule-based extraction
-                success = self.assert_response(response, [200, 404], "Metadata (Rule-based fallback)")
-                if response.status_code == 200:
-                    data = response.json()
-                    self.log(f"   Title: {data.get('title', 'N/A')}")
-                    self.log(f"   Authors: {len(data.get('authors', []))} found")
-                    self.log(f"   Year: {data.get('year', 'N/A')}")
-                    self.log(f"   ✅ Rule-based extraction working (LLM unavailable)")
-                elif response.status_code == 404:
-                    self.log("   No metadata found (normal for test files with rule-based extraction)")
+                self.log("   No metadata found")
         
         except Exception as e:
             self.log(f"Metadata test failed: {e}", "ERROR")
@@ -397,13 +332,14 @@ class RefServerAPITester:
         self.log("Testing embedding endpoint...")
         try:
             response = self.session.get(f"{self.base_url}/embedding/{self.test_doc_id}")
-            success = self.assert_response(response, [200, 404], "Embedding")  # 404 is OK if no embedding
+            success = self.assert_response(response, [200, 404], "Embedding")
             
             if response.status_code == 200:
                 data = response.json()
                 self.log(f"   Dimension: {data.get('dimension')}")
                 self.log(f"   Vector length: {len(data.get('vector', []))}")
-            elif response.status_code == 404:
+                self.log(f"   ✅ BGE-M3 embedding generated")
+            else:
                 self.log("   No embedding found")
         
         except Exception as e:
@@ -418,80 +354,30 @@ class RefServerAPITester:
         
         self.log("Testing layout endpoint...")
         
-        # Check if layout analysis should be available in current deployment mode
-        layout_expected = self.service_status.get('layout_analysis', False)
-        
         try:
             response = self.session.get(f"{self.base_url}/layout/{self.test_doc_id}")
             
-            if layout_expected:
-                # GPU mode: expect layout analysis to be available
+            if self.service_status.get('layout_analysis'):
                 success = self.assert_response(response, [200, 404], "Layout Analysis (GPU)")
                 if response.status_code == 200:
                     data = response.json()
                     self.log(f"   Pages: {data.get('page_count')}")
                     self.log(f"   Elements: {data.get('total_elements')}")
-                    self.log(f"   Element types: {data.get('element_types', {})}")
-                elif response.status_code == 404:
-                    self.log("   No layout analysis found (processing may have failed)")
+                    self.log(f"   ✅ Huridocs layout analysis successful")
+                else:
+                    self.log("   No layout analysis found")
             else:
-                # CPU mode: layout analysis unavailable, expect 404 or service unavailable
                 success = self.assert_response(response, [404, 503], "Layout Analysis (CPU - Not Available)")
-                if response.status_code == 404:
-                    self.log("   ✅ Layout analysis not available in CPU mode (expected)")
-                elif response.status_code == 503:
-                    self.log("   ✅ Layout service unavailable in CPU mode (expected)")
+                self.log("   ✅ Layout analysis not available in CPU mode (expected)")
         
         except Exception as e:
             self.log(f"Layout test failed: {e}", "ERROR")
             self.results['failed'] += 1
     
-    def test_get_preview(self):
-        """Test preview image endpoint"""
-        if not self.test_doc_id:
-            self.log("❌ Skipping preview test - no doc_id available", "WARN")
-            return
-        
-        self.log("Testing preview image endpoint...")
-        try:
-            response = self.session.get(f"{self.base_url}/preview/{self.test_doc_id}")
-            success = self.assert_response(response, [200, 404], "Preview Image")  # 404 is OK if no image
-            
-            if response.status_code == 200:
-                self.log(f"   Content-Type: {response.headers.get('content-type')}")
-                self.log(f"   Content-Length: {len(response.content)} bytes")
-            elif response.status_code == 404:
-                self.log("   No preview image found")
-        
-        except Exception as e:
-            self.log(f"Preview test failed: {e}", "ERROR")
-            self.results['failed'] += 1
-    
-    def test_get_text(self):
-        """Test text content endpoint"""
-        if not self.test_doc_id:
-            self.log("❌ Skipping text test - no doc_id available", "WARN")
-            return
-        
-        self.log("Testing text content endpoint...")
-        try:
-            response = self.session.get(f"{self.base_url}/text/{self.test_doc_id}")
-            success = self.assert_response(response, 200, "Text Content")
-            
-            if success:
-                data = response.json()
-                self.log(f"   Text length: {data.get('text_length')}")
-                self.log(f"   OCR Quality: {data.get('ocr_quality')}")
-        
-        except Exception as e:
-            self.log(f"Text test failed: {e}", "ERROR")
-            self.results['failed'] += 1
-    
-    def test_search(self):
-        """Test search endpoint"""
+    def test_search_and_stats(self):
+        """Test search and statistics endpoints"""
         self.log("Testing search endpoint...")
         try:
-            # Test basic search
             response = self.session.get(f"{self.base_url}/search?limit=5")
             success = self.assert_response(response, 200, "Search")
             
@@ -499,13 +385,10 @@ class RefServerAPITester:
                 data = response.json()
                 self.log(f"   Results found: {len(data.get('results', []))}")
                 self.log(f"   Total: {data.get('total')}")
-        
         except Exception as e:
             self.log(f"Search test failed: {e}", "ERROR")
             self.results['failed'] += 1
-    
-    def test_statistics(self):
-        """Test statistics endpoint"""
+        
         self.log("Testing statistics endpoint...")
         try:
             response = self.session.get(f"{self.base_url}/stats")
@@ -516,57 +399,44 @@ class RefServerAPITester:
                 self.log(f"   Total papers: {data.get('total_papers')}")
                 self.log(f"   Papers with metadata: {data.get('papers_with_metadata')}")
                 self.log(f"   Papers with embeddings: {data.get('papers_with_embeddings')}")
-        
         except Exception as e:
             self.log(f"Statistics test failed: {e}", "ERROR")
             self.results['failed'] += 1
     
-    def test_invalid_endpoints(self):
-        """Test invalid endpoints return proper 404"""
-        self.log("Testing invalid endpoints...")
+    def test_vector_search_api(self):
+        """Test v0.1.10+ vector search APIs"""
+        if not self.test_doc_id:
+            self.log("❌ Skipping vector search tests - no doc_id available", "WARN")
+            return
         
-        invalid_endpoints = [
-            "/nonexistent",
-            "/paper/invalid-doc-id",
-            "/metadata/invalid-doc-id",
-            "/job/invalid-job-id"
-        ]
+        self.log("Testing vector search APIs...")
         
-        for endpoint in invalid_endpoints:
-            try:
-                response = self.session.get(f"{self.base_url}{endpoint}")
-                self.assert_response(response, 404, f"Invalid endpoint: {endpoint}")
-            except Exception as e:
-                self.log(f"Invalid endpoint test failed for {endpoint}: {e}", "ERROR")
-                self.results['failed'] += 1
-    
-    def test_upload_errors(self):
-        """Test upload endpoint error handling"""
-        self.log("Testing upload error handling...")
-        
+        # Test similar documents search
         try:
-            # Test upload without file
-            response = self.session.post(f"{self.base_url}/upload")
-            self.assert_response(response, 422, "Upload without file")
+            response = self.session.get(f"{self.base_url}/similar/{self.test_doc_id}")
+            success = self.assert_response(response, [200, 404], "Similar Documents")
             
-            # Test upload with invalid file type (if validation exists)
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp_file:
-                tmp_file.write(b"This is not a PDF file")
-                tmp_file_path = tmp_file.name
-            
-            try:
-                with open(tmp_file_path, 'rb') as f:
-                    files = {'file': ('test.txt', f, 'text/plain')}
-                    response = self.session.post(f"{self.base_url}/upload", files=files)
-                    # This might be 422 (validation error), 400 (bad request), or 200 (if no validation)
-                    self.assert_response(response, [200, 400, 422], "Upload with non-PDF file")
-            finally:
-                import os
-                os.unlink(tmp_file_path)
-                
+            if response.status_code == 200:
+                data = response.json()
+                self.log(f"   Similar papers found: {len(data.get('similar_papers', []))}")
+                self.log(f"   ✅ ChromaDB vector search working")
+            else:
+                self.log("   No similar documents found (expected for single test)")
         except Exception as e:
-            self.log(f"Upload error testing failed: {e}", "ERROR")
+            self.log(f"Similar documents test failed: {e}", "ERROR")
+            self.results['failed'] += 1
+        
+        # Test vector stats
+        try:
+            response = self.session.get(f"{self.base_url}/vector/stats")
+            success = self.assert_response(response, 200, "Vector Database Stats")
+            
+            if success:
+                data = response.json()
+                self.log(f"   Total vectors: {data.get('total_vectors', 0)}")
+                self.log(f"   Collections: {data.get('collections', [])}")
+        except Exception as e:
+            self.log(f"Vector stats test failed: {e}", "ERROR")
             self.results['failed'] += 1
     
     def create_test_pdf(self) -> Optional[str]:
@@ -575,18 +445,18 @@ class RefServerAPITester:
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import letter
             
-            # Use tempfile for cross-platform compatibility
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
                 test_pdf_path = tmp_file.name
             
             c = canvas.Canvas(test_pdf_path, pagesize=letter)
-            c.drawString(100, 750, "Test Academic Paper")
+            c.drawString(100, 750, "Test Academic Paper for RefServer v0.1.12")
             c.drawString(100, 720, "Authors: John Doe, Jane Smith")
             c.drawString(100, 690, "Journal: Test Journal of Computer Science")
             c.drawString(100, 660, "Year: 2024")
             c.drawString(100, 620, "Abstract:")
             c.drawString(100, 600, "This is a test paper for RefServer API testing.")
             c.drawString(100, 580, "It contains minimal content to test the processing pipeline.")
+            c.drawString(100, 560, "Testing: OCR, embedding generation, metadata extraction.")
             c.showPage()
             c.save()
             
@@ -601,17 +471,17 @@ class RefServerAPITester:
             return None
     
     def run_all_tests(self, pdf_path: str = None):
-        """Run all API tests"""
-        self.log("🚀 Starting RefServer API Tests")
-        self.log("=" * 50)
+        """Run all core API tests"""
+        self.log("🚀 Starting RefServer Core API Tests (v0.1.12)")
+        self.log("=" * 60)
         
         start_time = time.time()
         
-        # Test basic endpoints first
+        # Test basic health and status
         self.test_health_check()
         self.test_service_status()
         
-        # Test new async PDF processing workflow
+        # Test async PDF processing workflow
         self.log("\n📤 Testing Async PDF Processing Workflow")
         job_id = self.test_upload_pdf(pdf_path)
         if job_id:
@@ -619,63 +489,48 @@ class RefServerAPITester:
             if doc_id:
                 self.test_doc_id = doc_id
         
-        # Test legacy synchronous processing for backward compatibility
-        self.log("\n🔄 Testing Legacy Synchronous Processing")
-        self.test_process_pdf_legacy(pdf_path)
-        
-        # Test data retrieval endpoints (use doc_id from async processing if available)
+        # Test data retrieval endpoints
         self.log("\n📊 Testing Data Retrieval Endpoints")
         self.test_get_paper_info()
         self.test_get_metadata()
         self.test_get_embedding()
         self.test_get_layout()
-        self.test_get_preview()
-        self.test_get_text()
         
-        # Test utility endpoints
-        self.log("\n🔍 Testing Utility Endpoints")
-        self.test_search()
-        self.test_statistics()
+        # Test search and statistics
+        self.log("\n🔍 Testing Search & Statistics")
+        self.test_search_and_stats()
         
-        # Test error handling
-        self.log("\n⚠️ Testing Error Handling")
-        self.test_invalid_endpoints()
-        self.test_upload_errors()
+        # Test vector search (v0.1.10+)
+        self.log("\n🧠 Testing Vector Search APIs")
+        self.test_vector_search_api()
         
         # Print summary
         total_time = time.time() - start_time
         total_tests = self.results['passed'] + self.results['failed']
         
-        self.log("=" * 50)
-        self.log("📊 Test Summary")
+        self.log("=" * 60)
+        self.log("📊 Core API Test Summary")
         self.log(f"   Total tests: {total_tests}")
         self.log(f"   Passed: {self.results['passed']} ✅")
         self.log(f"   Failed: {self.results['failed']} ❌")
-        self.log(f"   Success rate: {(self.results['passed']/total_tests*100):.1f}%")
+        success_rate = (self.results['passed']/total_tests*100) if total_tests > 0 else 0
+        self.log(f"   Success rate: {success_rate:.1f}%")
         self.log(f"   Total time: {total_time:.2f}s")
         
-        # Environment-specific summary
-        if hasattr(self, 'deployment_mode') and self.deployment_mode:
+        if self.deployment_mode:
             self.log(f"   Deployment mode: {self.deployment_mode}")
-            if self.deployment_mode == "GPU":
-                self.log("   🎮 GPU Features: Quality assessment ✅, Layout analysis ✅, LLM metadata ✅")
-            elif self.deployment_mode == "CPU":
-                self.log("   🖥️ CPU Features: Core processing ✅, Rule-based metadata ✅")
-                self.log("   ⚠️ GPU Features: Quality assessment ❌, Layout analysis ❌")
-            else:
-                self.log("   ⚠️ Minimal Features: Basic processing only")
-        
+            
         if self.test_doc_id:
             self.log(f"   Test document ID: {self.test_doc_id}")
         
-        # Interpret results based on deployment mode
-        success_threshold = 0.9 if self.deployment_mode == "GPU" else 0.7
-        is_success = (self.results['passed']/total_tests) >= success_threshold
+        # Success criteria based on deployment mode
+        success_threshold = 0.9 if self.deployment_mode == "GPU" else 0.75
+        is_success = success_rate >= (success_threshold * 100)
         
         if is_success:
-            self.log(f"   🎉 Test PASSED for {self.deployment_mode} mode")
+            self.log(f"   🎉 Core API tests PASSED for {self.deployment_mode} mode")
         else:
-            self.log(f"   ⚠️ Test results below expected threshold for {self.deployment_mode} mode")
+            self.log(f"   ⚠️ Core API tests below expected threshold for {self.deployment_mode} mode")
         
         return is_success
 
@@ -683,12 +538,10 @@ def main():
     """Main function"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="RefServer API Tester")
+    parser = argparse.ArgumentParser(description="RefServer Core API Tester")
     parser.add_argument("--url", default="http://localhost:8060", 
                        help="RefServer API base URL")
     parser.add_argument("--pdf", help="Path to test PDF file")
-    parser.add_argument("--timeout", type=int, default=30,
-                       help="Request timeout in seconds")
     
     args = parser.parse_args()
     
@@ -697,18 +550,13 @@ def main():
         response = requests.get(f"{args.url}/health", timeout=5)
         if response.status_code != 200:
             print(f"❌ Server not responding at {args.url}")
-            print(f"   Make sure RefServer is running with: docker-compose up")
             sys.exit(1)
     except requests.ConnectionError:
         print(f"❌ Cannot connect to {args.url}")
-        print(f"   Make sure RefServer is running with: docker-compose up")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Error connecting to server: {e}")
         sys.exit(1)
     
     # Run tests
-    tester = RefServerAPITester(args.url)
+    tester = RefServerCoreAPITester(args.url)
     success = tester.run_all_tests(args.pdf)
     
     sys.exit(0 if success else 1)
