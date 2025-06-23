@@ -67,8 +67,8 @@ class BackgroundScheduler:
         # Weekly comprehensive cleanup on Sunday at 3 AM
         schedule.every().sunday.at("03:00").do(self._weekly_comprehensive_cleanup)
         
-        # Monthly deep cleanup on 1st day at 4 AM
-        schedule.every().month.do(self._monthly_deep_cleanup)
+        # Monthly deep cleanup - check if it's the 1st day of the month at 4 AM
+        schedule.every().day.at("04:00").do(self._check_monthly_cleanup)
         
         logger.info("📅 Scheduled background tasks:")
         logger.info("  - Daily cleanup: Every day at 2:00 AM")
@@ -162,6 +162,12 @@ class BackgroundScheduler:
             
         except Exception as e:
             logger.error(f"Weekly comprehensive cleanup failed: {e}")
+    
+    def _check_monthly_cleanup(self):
+        """Check if today is the 1st day of month and run monthly cleanup"""
+        today = datetime.now()
+        if today.day == 1:
+            self._monthly_deep_cleanup()
     
     def _monthly_deep_cleanup(self):
         """Monthly deep cleanup - aggressive cleanup with longer thresholds"""

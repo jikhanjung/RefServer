@@ -397,6 +397,9 @@ def compute_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         similarity = max(0.0, min(1.0, float(similarity)))
         
         return similarity
+    except Exception as e:
+        logger.error(f"Error computing similarity: {e}")
+        return 0.0
 
 # ChromaDB Integration Functions
 def save_paper_embedding_to_vectordb(doc_id: str, embedding: np.ndarray, metadata: dict = None) -> bool:

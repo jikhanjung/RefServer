@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 from PIL import Image
 import io
 
-from retry_utils import async_retry, OLLAMA_RETRY_CONFIG, RetryError
+from retry_utils import async_retry, sync_retry, OLLAMA_RETRY_CONFIG, RetryError
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +261,7 @@ Be specific about any issues you observe and provide actionable recommendations.
             # Make API request with retry
             logger.info("Sending request to LLaVA...")
             
-            async def make_llava_request():
+            def make_llava_request():
                 return requests.post(
                     self.api_url,
                     json=request_data,
@@ -270,8 +270,7 @@ Be specific about any issues you observe and provide actionable recommendations.
                 )
             
             try:
-                import asyncio
-                response = asyncio.run(async_retry(make_llava_request, config=OLLAMA_RETRY_CONFIG))
+                response = sync_retry(make_llava_request, config=OLLAMA_RETRY_CONFIG)
             except RetryError as e:
                 logger.error(f"LLaVA request failed after retries: {e}")
                 return self._create_default_assessment()
@@ -310,12 +309,11 @@ Be specific about any issues you observe and provide actionable recommendations.
             # Check server health with retry
             health_url = f"{self.ollama_host}/api/tags"
             
-            async def check_health():
+            def check_health():
                 return requests.get(health_url, timeout=10)
             
             try:
-                import asyncio
-                response = asyncio.run(async_retry(check_health, config=OLLAMA_RETRY_CONFIG))
+                response = sync_retry(check_health, config=OLLAMA_RETRY_CONFIG)
             except RetryError as e:
                 logger.error(f"Ollama health check failed after retries: {e}")
                 return False

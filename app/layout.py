@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 import time
 from pathlib import Path
 
-from retry_utils import async_retry, HURIDOCS_RETRY_CONFIG, RetryError
+from retry_utils import async_retry, sync_retry, HURIDOCS_RETRY_CONFIG, RetryError
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,11 @@ class HuridocsLayoutAnalyzer:
             return False
             
         try:
-            async def check_health():
+            def check_health():
                 return requests.get(self.status_url, timeout=10)
             
             try:
-                import asyncio
-                response = asyncio.run(async_retry(check_health, config=HURIDOCS_RETRY_CONFIG))
+                response = sync_retry(check_health, config=HURIDOCS_RETRY_CONFIG)
             except RetryError as e:
                 logger.error(f"Huridocs health check failed after retries: {e}")
                 return False
@@ -96,7 +95,7 @@ class HuridocsLayoutAnalyzer:
             # Prepare file for upload and make request with retry
             logger.info("Sending PDF to Huridocs layout service...")
             
-            async def make_layout_request():
+            def make_layout_request():
                 with open(pdf_path, 'rb') as pdf_file:
                     files = {
                         'file': (os.path.basename(pdf_path), pdf_file, 'application/pdf')
@@ -108,8 +107,7 @@ class HuridocsLayoutAnalyzer:
                     )
             
             try:
-                import asyncio
-                response = asyncio.run(async_retry(make_layout_request, config=HURIDOCS_RETRY_CONFIG))
+                response = sync_retry(make_layout_request, config=HURIDOCS_RETRY_CONFIG)
             except RetryError as e:
                 logger.error(f"Huridocs layout request failed after retries: {e}")
                 return self._create_error_result(f"Layout analysis failed after retries: {str(e)}")

@@ -58,7 +58,151 @@ class DuplicateDetector:
             file_size = 0
             
             with open(file_path, 'rb') as f:
-                for chunk in iter(lambda: f.read(4096), b""):\n                    md5_hash.update(chunk)\n                    file_size += len(chunk)\n            \n            hash_result = md5_hash.hexdigest()\n            processing_time = time.time() - start_time\n            \n            logger.info(f"Level 0: File hash computed in {processing_time:.2f}s - {hash_result[:8]}...")\n            return hash_result, file_size\n            \n        except Exception as e:\n            logger.error(f"Level 0: File hash computation failed: {e}")\n            raise\n    \n    def check_file_duplicate(self, file_path: str, filename: str) -> Optional[str]:\n        """\n        Level 0: Check for file-level duplicates using MD5 hash\n        \n        Args:\n            file_path: Path to PDF file\n            filename: Original filename\n            \n        Returns:\n            Optional[str]: Existing paper doc_id if duplicate found, None otherwise\n        """\n        try:\n            file_md5, file_size = self.compute_file_hash(file_path)\n            \n            # Check if this exact file already exists\n            existing_hash = FileHash.get_or_none(FileHash.file_md5 == file_md5)\n            \n            if existing_hash:\n                logger.info(f"🎯 Level 0: Exact file duplicate detected - {existing_hash.paper.doc_id}")\n                return existing_hash.paper.doc_id\n            \n            logger.info(f"✅ Level 0: No file duplicate found - {file_md5[:8]}...")\n            return None\n            \n        except Exception as e:\n            logger.error(f"Level 0: File duplicate check failed: {e}")\n            return None\n    \n    def save_file_hash(self, file_path: str, filename: str, paper_doc_id: str) -> bool:\n        """\n        Save file hash for future duplicate detection\n        \n        Args:\n            file_path: Path to PDF file\n            filename: Original filename\n            paper_doc_id: Associated paper document ID\n            \n        Returns:\n            bool: True if saved successfully\n        """\n        try:\n            file_md5, file_size = self.compute_file_hash(file_path)\n            paper = Paper.get(Paper.doc_id == paper_doc_id)\n            \n            # Create or update file hash record\n            FileHash.replace(\n                file_md5=file_md5,\n                file_size=file_size,\n                original_filename=filename,\n                paper=paper\n            ).execute()\n            \n            logger.info(f"✅ Level 0: File hash saved - {file_md5[:8]}...")\n            return True\n            \n        except Exception as e:\n            logger.error(f"Level 0: Failed to save file hash: {e}")\n            return False\n    \n    def extract_pdf_metadata_and_text(self, file_path: str) -> Dict:\n        """\n        Extract PDF metadata and first 3 pages text for content hashing\n        \n        Args:\n            file_path: Path to PDF file\n            \n        Returns:\n            Dict: PDF metadata and text content\n        """\n        start_time = time.time()\n        \n        try:\n            # Extract using PyMuPDF for better reliability\n            doc = fitz.open(file_path)\n            \n            # Get PDF metadata\n            metadata = doc.metadata\n            page_count = len(doc)\n            \n            # Extract first 3 pages text\n            first_three_pages_text = ""\n            max_pages = min(3, page_count)\n            \n            for page_num in range(max_pages):\n                page = doc[page_num]\n                text = page.get_text()\n                first_three_pages_text += text + "\\n"\n            \n            doc.close()\n            \n            # Truncate text if too long (keep first 5000 chars)\n            if len(first_three_pages_text) > 5000:\n                first_three_pages_text = first_three_pages_text[:5000] + "..."\n            \n            result = {\n                'pdf_title': metadata.get('title', '').strip(),\n                'pdf_author': metadata.get('author', '').strip(),\n                'pdf_creator': metadata.get('creator', '').strip(),\n                'page_count': page_count,\n                'first_three_pages_text': first_three_pages_text.strip()\n            }\n            \n            processing_time = time.time() - start_time\n            logger.info(f"Level 1: PDF metadata extracted in {processing_time:.2f}s")\n            \n            return result\n            \n        except Exception as e:\n            logger.error(f"Level 1: PDF metadata extraction failed: {e}")\n            return {\n                'pdf_title': '',\n                'pdf_author': '',\n                'pdf_creator': '',\n                'page_count': 0,\n                'first_three_pages_text': ''\n            }\n    \n    def compute_content_hash(self, pdf_info: Dict) -> str:\n        """\n        Level 1: Compute SHA-256 hash of PDF metadata + first 3 pages text\n        \n        Args:\n            pdf_info: Dictionary with PDF metadata and text\n            \n        Returns:\n            str: SHA-256 hash\n        """\n        try:\n            # Create hash input string\n            hash_input = "|\n            hash_input += f"title:{pdf_info.get('pdf_title', '')}"
+                for chunk in iter(lambda: f.read(4096), b""):
+                    md5_hash.update(chunk)
+                    file_size += len(chunk)
+            
+            hash_result = md5_hash.hexdigest()
+            processing_time = time.time() - start_time
+            
+            logger.info(f"Level 0: File hash computed in {processing_time:.2f}s - {hash_result[:8]}...")
+            return hash_result, file_size
+            
+        except Exception as e:
+            logger.error(f"Level 0: File hash computation failed: {e}")
+            raise
+    
+    def check_file_duplicate(self, file_path: str, filename: str) -> Optional[str]:
+        """
+        Level 0: Check for file-level duplicates using MD5 hash
+        
+        Args:
+            file_path: Path to PDF file
+            filename: Original filename
+            
+        Returns:
+            Optional[str]: Existing paper doc_id if duplicate found, None otherwise
+        """
+        try:
+            file_md5, file_size = self.compute_file_hash(file_path)
+            
+            # Check if this exact file already exists
+            existing_hash = FileHash.get_or_none(FileHash.file_md5 == file_md5)
+            
+            if existing_hash:
+                logger.info(f"🎯 Level 0: Exact file duplicate detected - {existing_hash.paper.doc_id}")
+                return existing_hash.paper.doc_id
+            
+            logger.info(f"✅ Level 0: No file duplicate found - {file_md5[:8]}...")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Level 0: File duplicate check failed: {e}")
+            return None
+    
+    def save_file_hash(self, file_path: str, filename: str, paper_doc_id: str) -> bool:
+        """
+        Save file hash for future duplicate detection
+        
+        Args:
+            file_path: Path to PDF file
+            filename: Original filename
+            paper_doc_id: Associated paper document ID
+            
+        Returns:
+            bool: True if saved successfully
+        """
+        try:
+            file_md5, file_size = self.compute_file_hash(file_path)
+            paper = Paper.get(Paper.doc_id == paper_doc_id)
+            
+            # Create or update file hash record
+            FileHash.replace(
+                file_md5=file_md5,
+                file_size=file_size,
+                original_filename=filename,
+                paper=paper
+            ).execute()
+            
+            logger.info(f"✅ Level 0: File hash saved - {file_md5[:8]}...")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Level 0: Failed to save file hash: {e}")
+            return False
+    
+    def extract_pdf_metadata_and_text(self, file_path: str) -> Dict:
+        """
+        Extract PDF metadata and first 3 pages text for content hashing
+        
+        Args:
+            file_path: Path to PDF file
+            
+        Returns:
+            Dict: PDF metadata and text content
+        """
+        start_time = time.time()
+        
+        try:
+            # Extract using PyMuPDF for better reliability
+            doc = fitz.open(file_path)
+            
+            # Get PDF metadata
+            metadata = doc.metadata
+            page_count = len(doc)
+            
+            # Extract first 3 pages text
+            first_three_pages_text = ""
+            max_pages = min(3, page_count)
+            
+            for page_num in range(max_pages):
+                page = doc[page_num]
+                text = page.get_text()
+                first_three_pages_text += text + "\n"
+            
+            doc.close()
+            
+            # Truncate text if too long (keep first 5000 chars)
+            if len(first_three_pages_text) > 5000:
+                first_three_pages_text = first_three_pages_text[:5000] + "..."
+            
+            result = {
+                'pdf_title': metadata.get('title', '').strip(),
+                'pdf_author': metadata.get('author', '').strip(),
+                'pdf_creator': metadata.get('creator', '').strip(),
+                'page_count': page_count,
+                'first_three_pages_text': first_three_pages_text.strip()
+            }
+            
+            processing_time = time.time() - start_time
+            logger.info(f"Level 1: PDF metadata extracted in {processing_time:.2f}s")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Level 1: PDF metadata extraction failed: {e}")
+            return {
+                'pdf_title': '',
+                'pdf_author': '',
+                'pdf_creator': '',
+                'page_count': 0,
+                'first_three_pages_text': ''
+            }
+    
+    def compute_content_hash(self, pdf_info: Dict) -> str:
+        """
+        Level 1: Compute SHA-256 hash of PDF metadata + first 3 pages text
+        
+        Args:
+            pdf_info: Dictionary with PDF metadata and text
+            
+        Returns:
+            str: SHA-256 hash
+        """
+        try:
+            # Create hash input string
+            hash_input = "|"
+            hash_input += f"title:{pdf_info.get('pdf_title', '')}"
             hash_input += f"|author:{pdf_info.get('pdf_author', '')}"
             hash_input += f"|creator:{pdf_info.get('pdf_creator', '')}"
             hash_input += f"|pages:{pdf_info.get('page_count', 0)}"

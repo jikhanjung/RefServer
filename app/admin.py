@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import os
 
 from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding

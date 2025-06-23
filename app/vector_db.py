@@ -59,8 +59,8 @@ class ChromaVectorDB:
                 metadata={
                     "hnsw:space": "cosine",
                     "hnsw:M": 16,
-                    "hnsw:ef_construction": 200,
-                    "hnsw:ef": 10,
+                    "hnsw:construction_ef": 200,
+                    "hnsw:search_ef": 10,
                     "description": "Document-level embeddings for academic papers"
                 }
             )
@@ -71,8 +71,8 @@ class ChromaVectorDB:
                 metadata={
                     "hnsw:space": "cosine", 
                     "hnsw:M": 16,
-                    "hnsw:ef_construction": 200,
-                    "hnsw:ef": 10,
+                    "hnsw:construction_ef": 200,
+                    "hnsw:search_ef": 10,
                     "description": "Page-level embeddings for academic papers"
                 }
             )
