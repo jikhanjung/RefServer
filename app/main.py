@@ -582,7 +582,7 @@ async def get_paper_preview(doc_id: str):
     """Get first page preview image"""
     try:
         # Construct image path
-        image_path = Path("/data/images") / f"{doc_id}_page1.png"
+        image_path = Path("/refdata/images") / f"{doc_id}_page1.png"
         
         if not image_path.exists():
             raise HTTPException(status_code=404, detail="Preview image not found")

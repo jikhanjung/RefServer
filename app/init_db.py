@@ -27,6 +27,20 @@ def main():
         
         if success:
             logger.info("Database initialization completed successfully")
+            
+            # Ensure default admin user exists
+            try:
+                from auth import AuthManager
+                logger.info("Checking for default admin user...")
+                
+                if AuthManager.ensure_default_admin():
+                    logger.info("✅ Default admin user ensured (username: admin, password: admin123)")
+                else:
+                    logger.warning("⚠️ Failed to create default admin user")
+                    
+            except Exception as e:
+                logger.error(f"Error creating default admin user: {e}")
+            
             sys.exit(0)
         else:
             logger.error("Database initialization failed")

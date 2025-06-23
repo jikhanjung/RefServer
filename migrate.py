@@ -18,12 +18,12 @@ def get_timestamp():
 def main():
     """Create new migration based on model changes"""
     # Override database path for local development
-    local_data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    local_data_dir = os.path.join(os.path.dirname(__file__), 'refdata')
     if not os.path.exists(local_data_dir):
         os.makedirs(local_data_dir)
         print(f"Created data directory: {local_data_dir}")
     
-    # Use local database path instead of /data
+    # Use local database path instead of /refdata
     local_db_path = os.path.join(local_data_dir, 'refserver.db')
     
     # Ensure migrations directory exists

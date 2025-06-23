@@ -32,7 +32,7 @@ class PDFProcessingPipeline:
     Unified PDF processing pipeline that orchestrates all processing steps
     """
     
-    def __init__(self, data_dir: str = "/data"):
+    def __init__(self, data_dir: str = "/refdata"):
         """
         Initialize PDF processing pipeline
         

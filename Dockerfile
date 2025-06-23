@@ -39,7 +39,7 @@ COPY app/ .
 COPY migrations/ /app/migrations/
 
 # Create data directory
-RUN mkdir -p /data
+RUN mkdir -p /refdata
 
 # Expose port
 EXPOSE 8000

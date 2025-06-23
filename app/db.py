@@ -13,7 +13,7 @@ def initialize_database():
     """
     try:
         # Ensure data directory exists
-        data_dir = '/data'
+        data_dir = '/refdata'
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
             logger.info(f"Created data directory: {data_dir}")

@@ -28,7 +28,7 @@ BackupType = Literal["full", "incremental", "snapshot"]
 class SQLiteBackupManager:
     """Manages SQLite database backups with scheduling and recovery capabilities"""
     
-    def __init__(self, db_path: str, backup_dir: str = "/data/backups"):
+    def __init__(self, db_path: str, backup_dir: str = "/refdata/backups"):
         self.db_path = db_path
         self.backup_base_dir = Path(backup_dir)
         self.sqlite_backup_dir = self.backup_base_dir / "sqlite"
@@ -533,7 +533,7 @@ class SQLiteBackupManager:
 class ChromaDBBackupManager:
     """Manages ChromaDB vector database backups"""
     
-    def __init__(self, chromadb_dir: str = "/data/chromadb", backup_dir: str = "/data/backups"):
+    def __init__(self, chromadb_dir: str = "/refdata/chromadb", backup_dir: str = "/refdata/backups"):
         self.chromadb_dir = Path(chromadb_dir)
         self.backup_base_dir = Path(backup_dir)
         self.chromadb_backup_dir = self.backup_base_dir / "chromadb"
@@ -793,7 +793,7 @@ _chromadb_backup_manager: Optional[ChromaDBBackupManager] = None
 _unified_backup_manager: Optional[UnifiedBackupManager] = None
 
 
-def get_backup_manager(db_path: str = "/data/refserver.db") -> SQLiteBackupManager:
+def get_backup_manager(db_path: str = "/refdata/refserver.db") -> SQLiteBackupManager:
     """Get or create the backup manager singleton"""
     global _backup_manager
     if _backup_manager is None:

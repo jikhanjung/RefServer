@@ -18,15 +18,15 @@ from models import db, AdminUser
 def init_db():
     """Initialize database connection"""
     try:
-        # Check if running in Docker (use /data) or locally (use ./data)
-        if Path('/data').exists():
+        # Check if running in Docker (use /refdata) or locally (use ./refdata)
+        if Path('/refdata').exists():
             # Docker environment
-            data_dir = Path('/data')
+            data_dir = Path('/refdata')
             db_path = data_dir / 'refserver.db'
             print(f"Docker environment detected. Using: {db_path}")
         else:
             # Local development environment
-            data_dir = Path(__file__).parent / 'data'
+            data_dir = Path(__file__).parent / 'refdata'
             if not data_dir.exists():
                 data_dir.mkdir(parents=True, exist_ok=True)
                 print(f"Created data directory: {data_dir}")

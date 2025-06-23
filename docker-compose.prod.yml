@@ -5,7 +5,7 @@ services:
     ports:
       - "8060:8000"
     volumes:
-      - ./data:/data
+      - ./refdata:/refdata
     environment:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434

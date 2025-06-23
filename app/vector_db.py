@@ -25,10 +25,10 @@ class ChromaVectorDB:
         Initialize ChromaDB client with persistent storage
         
         Args:
-            persist_dir: str, directory for persistent storage (default: /data/chromadb)
+            persist_dir: str, directory for persistent storage (default: /refdata/chromadb)
         """
         # Set up persistent directory
-        self.persist_dir = persist_dir or "/data/chromadb"
+        self.persist_dir = persist_dir or "/refdata/chromadb"
         os.makedirs(self.persist_dir, exist_ok=True)
         
         # Initialize persistent client

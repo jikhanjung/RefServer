@@ -1145,7 +1145,7 @@ async def get_disaster_recovery_status(user: AdminUser = Depends(require_auth)):
                     chromadb_backups += len(list(backup_dir.glob("*.tar*")))
         
         # Check disk space
-        total, used, free = shutil.disk_usage("/data")
+        total, used, free = shutil.disk_usage("/refdata")
         free_gb = free // (1024**3)
         
         # Check scripts
