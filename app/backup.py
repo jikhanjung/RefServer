@@ -18,6 +18,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 import logging
+from version import get_version
 import tarfile
 
 logger = logging.getLogger("RefServerBackup")
@@ -588,7 +589,7 @@ class ChromaDBBackupManager:
                     "timestamp": timestamp.isoformat(),
                     "type": backup_type,
                     "chromadb_dir": str(self.chromadb_dir),
-                    "version": "0.1.12"
+                    "version": get_version()
                 }
                 metadata_str = json.dumps(metadata, indent=2)
                 metadata_bytes = metadata_str.encode('utf-8')

@@ -15,6 +15,7 @@ from auth import AuthManager
 from db import get_paper_by_id, get_page_embeddings_by_id, db
 from vector_db import get_vector_db
 from duplicate_detector import get_duplicate_detector
+from version import get_version
 
 
 # Initialize router and templates
@@ -589,7 +590,7 @@ async def vector_db_monitoring(request: Request):
                 "request": request, 
                 "user": user,
                 "dashboard_data": dashboard_data,
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
         
@@ -600,7 +601,7 @@ async def vector_db_monitoring(request: Request):
                 "request": request, 
                 "user": user,
                 "error": f"Error loading ChromaDB statistics: {str(e)}",
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
 
@@ -824,7 +825,7 @@ async def duplicate_prevention_monitoring(request: Request):
                 "request": request,
                 "user": user,
                 "dashboard_data": dashboard_data,
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
         
@@ -835,7 +836,7 @@ async def duplicate_prevention_monitoring(request: Request):
                 "request": request,
                 "user": user,
                 "error": f"Error loading duplicate prevention statistics: {str(e)}",
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
 
@@ -871,7 +872,7 @@ async def scheduler_management(request: Request):
                 "request": request,
                 "user": user,
                 "dashboard_data": dashboard_data,
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
         
@@ -882,7 +883,7 @@ async def scheduler_management(request: Request):
                 "request": request,
                 "user": user,
                 "error": f"Error loading scheduler management: {str(e)}",
-                "version": "v0.1.10"
+                "version": get_version()
             }
         )
 
@@ -1037,7 +1038,7 @@ async def backup_management_page(request: Request, user: AdminUser = Depends(req
                 "user": user,
                 "backup_status": backup_status,
                 "recent_backups": recent_backups,
-                "version": "v0.1.12"
+                "version": get_version()
             }
         )
         
@@ -1048,7 +1049,7 @@ async def backup_management_page(request: Request, user: AdminUser = Depends(req
                 "request": request,
                 "user": user,
                 "error": f"Error loading backup management: {str(e)}",
-                "version": "v0.1.12"
+                "version": get_version()
             }
         )
 
@@ -1303,7 +1304,7 @@ async def consistency_management_page(request: Request, user: AdminUser = Depend
                 "request": request,
                 "user": user,
                 "consistency_summary": summary,
-                "version": "v0.1.12"
+                "version": get_version()
             }
         )
         
@@ -1314,7 +1315,7 @@ async def consistency_management_page(request: Request, user: AdminUser = Depend
                 "request": request,
                 "user": user,
                 "error": f"Error loading consistency management: {str(e)}",
-                "version": "v0.1.12"
+                "version": get_version()
             }
         )
 

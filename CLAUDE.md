@@ -195,12 +195,18 @@ RefServer/
 - [x] `test_admin_system.py`: 관리자 인터페이스 및 권한 관리 테스트 (v0.1.12)
 - [x] `test_ocr_language_detection.py`: 하이브리드 언어 감지 OCR 테스트
 - [x] **`create_test_pdfs.py`: 종합 테스트용 PDF 생성기** ⭐
-    - **10가지 고생물학 논문 유형**: theropod, trilobite, marine_reptile, plant_fossil, mass_extinction, mammal_evolution, trace_fossil, amber_inclusion, microorganism, taphonomy
+    - **외부 JSON 템플릿 시스템**: `paper_templates.json`에서 논문 내용 동적 로딩 (v0.1.12+)
+    - **3개 논문 유형**: theropod, trilobite, marine_reptile (JSON에서 확장 가능)
     - **4개 언어 지원**: 영어, 한국어, 일본어, 중국어 (CJK 폰트 완벽 지원)
     - **복합 레이아웃**: 첫 페이지 1컬럼(초록까지) + 2컬럼(본문) 혼합 구조
     - **텍스트 레이어 제어**: 일반 PDF + OCR 테스트용 텍스트 레이어 없는 PDF
-    - **총 22개 PDF 파일 생성**: 언어별, 유형별, 텍스트 레이어 유무별 조합
+    - **유지보수성 개선**: 하드코딩 제거, JSON 편집으로 내용 관리
     - **현실적인 학술 내용**: 완전한 Introduction + Methods + Results + Discussion + Conclusions 구조
+- [x] **`paper_templates.json`: 외부 논문 내용 템플릿** ⭐ (NEW v0.1.12+)
+    - **구조화된 논문 내용**: 유형별/언어별 완전한 학술 논문 내용 템플릿
+    - **현지화된 내용**: 각 언어로 완전히 번역된 고품질 학술 내용
+    - **확장 가능한 구조**: 새 논문 유형이나 언어 추가 용이
+    - **표준화된 형식**: title, abstract, authors, affiliation, keywords, introduction, methods, results, discussion, conclusion, doi
 - [x] `download_model.py`: BGE-M3 모델 로컬 다운로드
 - [x] `migrate.py`: 데이터베이스 마이그레이션 유틸리티
 
@@ -398,4 +404,4 @@ brew install poppler
 - **[ROADMAP.md](./ROADMAP.md)**: 향후 개발 계획 및 로드맵
 - **[tests/TESTING_GUIDE.md](./tests/TESTING_GUIDE.md)**: 종합 테스트 가이드 및 성공 기준
 
-현재 상태: **v0.1.12** - 엔터프라이즈급 백업 시스템, 재해 복구, 데이터베이스 일관성 검증, 종합 테스트 PDF 생성기 완비
+현재 상태: **v0.1.12+** - 엔터프라이즈급 백업 시스템, 재해 복구, 데이터베이스 일관성 검증, 종합 테스트 PDF 생성기, 외부 JSON 템플릿 시스템 완비
