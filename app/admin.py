@@ -549,13 +549,14 @@ async def vector_db_monitoring(request: Request):
         # Get SQLite paper counts for comparison
         total_papers = Paper.select().count()
         papers_with_embeddings = (Paper
-                                .select()
+                                .select(Paper.id)
                                 .join(Embedding, on=(Paper.id == Embedding.paper))
+                                .group_by(Paper.id)
                                 .count())
         papers_with_page_embeddings = (Paper
-                                     .select()
+                                     .select(Paper.id)
                                      .join(PageEmbedding, on=(Paper.id == PageEmbedding.paper))
-                                     .distinct()
+                                     .group_by(Paper.id)
                                      .count())
         
         # Calculate coverage percentages
