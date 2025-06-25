@@ -44,6 +44,10 @@ class BackupTest(BaseTest):
                 result['error'] = "관리자 로그인 실패"
                 return result
             
+            # 배포 모드 확인
+            mode = self.detect_deployment_mode()
+            self.log(f"배포 모드: {mode.upper()}", "INFO")
+            
             tests = [
                 self.test_backup_dashboard,
                 self.test_backup_status,
@@ -51,6 +55,10 @@ class BackupTest(BaseTest):
                 self.test_consistency_check,
                 self.test_disaster_recovery_status
             ]
+            
+            # CPU 모드에서는 일부 고급 백업 기능이 제한될 수 있음을 알림
+            if self.is_cpu_mode():
+                self.log("CPU 모드: 일부 백업 기능이 제한될 수 있습니다", "WARNING")
             
             result['tests_total'] = len(tests)
             

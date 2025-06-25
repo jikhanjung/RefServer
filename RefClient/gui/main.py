@@ -51,12 +51,18 @@ class RefClientMainWindow(QMainWindow):
         # 툴바 영역
         toolbar_layout = QHBoxLayout()
         
-        # 연결 상태 표시
+        # 연결 상태 및 배포 모드 표시
         self.connection_status = QLabel("연결 안됨")
         self.connection_status.setStyleSheet("color: red; font-weight: bold;")
+        
+        self.deployment_mode = QLabel("모드: 감지 중")
+        self.deployment_mode.setStyleSheet("color: gray; font-weight: bold;")
+        
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(QLabel("서버 상태:"))
         toolbar_layout.addWidget(self.connection_status)
+        toolbar_layout.addWidget(QLabel(" | "))
+        toolbar_layout.addWidget(self.deployment_mode)
         
         main_layout.addLayout(toolbar_layout)
         
@@ -289,7 +295,7 @@ class RefClientMainWindow(QMainWindow):
         self.log_viewer.add_log(f"서버 URL: {server_url}", "INFO")
         
     def check_server_status(self):
-        """서버 연결 상태 확인"""
+        """서버 연결 상태 및 배포 모드 확인"""
         try:
             import requests
             server_url = self.config_manager.get_server_url()
@@ -299,14 +305,63 @@ class RefClientMainWindow(QMainWindow):
                 self.connection_status.setText("연결됨")
                 self.connection_status.setStyleSheet("color: green; font-weight: bold;")
                 self.statusBar().showMessage("서버 연결 정상")
+                
+                # 배포 모드 감지
+                self.detect_deployment_mode()
             else:
                 self.connection_status.setText("오류")
                 self.connection_status.setStyleSheet("color: orange; font-weight: bold;")
+                self.deployment_mode.setText("모드: 알 수 없음")
+                self.deployment_mode.setStyleSheet("color: orange; font-weight: bold;")
                 
         except Exception as e:
             self.connection_status.setText("연결 안됨")
             self.connection_status.setStyleSheet("color: red; font-weight: bold;")
+            self.deployment_mode.setText("모드: 연결 안됨")
+            self.deployment_mode.setStyleSheet("color: red; font-weight: bold;")
             self.statusBar().showMessage(f"서버 연결 실패: {str(e)}")
+            
+    def detect_deployment_mode(self):
+        """배포 모드 감지 및 표시"""
+        try:
+            import requests
+            server_url = self.config_manager.get_server_url()
+            
+            # 상태 엔드포인트에서 배포 모드 정보 확인
+            response = requests.get(f"{server_url}/status", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 배포 모드 정보가 있는 경우
+                if 'deployment_mode' in data:
+                    mode = data['deployment_mode'].upper()
+                    self.deployment_mode.setText(f"모드: {mode}")
+                    
+                    if mode == 'GPU':
+                        self.deployment_mode.setStyleSheet("color: blue; font-weight: bold;")
+                    else:
+                        self.deployment_mode.setStyleSheet("color: green; font-weight: bold;")
+                    return
+                    
+                # GPU 정보로 추측
+                gpu_available = data.get('gpu_available', False)
+                if gpu_available:
+                    mode = "GPU"
+                    self.deployment_mode.setStyleSheet("color: blue; font-weight: bold;")
+                else:
+                    mode = "CPU"
+                    self.deployment_mode.setStyleSheet("color: green; font-weight: bold;")
+                    
+                self.deployment_mode.setText(f"모드: {mode}")
+                
+            else:
+                # 상태 API 실패 시 기본값
+                self.deployment_mode.setText("모드: CPU (추정)")
+                self.deployment_mode.setStyleSheet("color: gray; font-weight: bold;")
+                
+        except Exception as e:
+            self.deployment_mode.setText("모드: 감지 실패")
+            self.deployment_mode.setStyleSheet("color: orange; font-weight: bold;")
             
     def run_all_tests(self):
         """모든 테스트 실행"""

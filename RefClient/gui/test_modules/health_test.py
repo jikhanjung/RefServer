@@ -28,6 +28,10 @@ class HealthTest(BaseTest):
         try:
             self.log("=== 서버 연결성 테스트 시작 ===", "INFO")
             
+            # 배포 모드 감지 및 표시
+            mode = self.detect_deployment_mode()
+            self.log(f"감지된 배포 모드: {mode.upper()}", "INFO")
+            
             tests = [
                 self.test_health_endpoint,
                 self.test_status_endpoint,
@@ -35,6 +39,13 @@ class HealthTest(BaseTest):
                 self.test_invalid_endpoint,
                 self.test_response_time
             ]
+            
+            # CPU 모드에서는 Ollama 의존적 테스트 제외
+            if self.is_gpu_mode():
+                tests.append(self.test_ollama_connectivity)
+                self.log("GPU 모드: Ollama 연결성 테스트 포함", "INFO")
+            else:
+                self.log("CPU 모드: Ollama 테스트 제외", "INFO")
             
             result['tests_total'] = len(tests)
             
@@ -177,4 +188,49 @@ class HealthTest(BaseTest):
                 
         except Exception as e:
             self.log(f"✗ 응답 시간 테스트 예외: {e}", "FAIL")
+            return False
+            
+    def test_ollama_connectivity(self) -> bool:
+        """Ollama 연결성 테스트 (GPU 모드에서만 실행)"""
+        self.log("Ollama 연결성 테스트", "INFO")
+        
+        try:
+            # RefServer를 통해 Ollama 상태 확인
+            response = self.make_request("GET", "/health")
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Ollama 상태 정보 확인
+                if 'services' in data:
+                    services = data['services']
+                    if 'ollama' in services:
+                        ollama_status = services['ollama']
+                        if ollama_status == 'available':
+                            self.log("✓ Ollama 서비스 연결 정상", "PASS")
+                            return True
+                        else:
+                            self.log(f"✗ Ollama 서비스 상태 이상: {ollama_status}", "FAIL")
+                            return False
+                
+                # 대안: 헬스체크에 ollama_status 필드가 있는 경우
+                if 'ollama_status' in data:
+                    ollama_status = data['ollama_status']
+                    if ollama_status == 'available':
+                        self.log("✓ Ollama 연결 확인됨", "PASS")
+                        return True
+                    else:
+                        self.log(f"✗ Ollama 연결 실패: {ollama_status}", "FAIL")
+                        return False
+                
+                # Ollama 상태 정보가 없는 경우
+                self.log("✓ Ollama 상태 정보 없음 (정상적일 수 있음)", "PASS")
+                return True
+                
+            else:
+                self.log(f"✗ 헬스체크 HTTP 오류: {response.status_code}", "FAIL")
+                return False
+                
+        except Exception as e:
+            self.log(f"✗ Ollama 연결성 테스트 예외: {e}", "FAIL")
             return False

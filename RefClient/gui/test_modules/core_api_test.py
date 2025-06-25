@@ -35,13 +35,20 @@ class CoreApiTest(BaseTest):
                 result['error'] = "서버 연결 실패"
                 return result
             
+            # 기본 테스트 목록
             tests = [
-                self.test_upload_simple,
-                self.test_job_status_polling,
                 self.test_paper_info,
                 self.test_download,
                 self.test_search_api
             ]
+            
+            # GPU 모드에서만 PDF 처리 테스트 (Ollama 의존적)
+            if self.is_gpu_mode():
+                tests.insert(0, self.test_upload_simple)
+                tests.insert(1, self.test_job_status_polling)
+                self.log("GPU 모드: PDF 처리 테스트 포함", "INFO")
+            else:
+                self.log("CPU 모드: PDF 처리 테스트 제외 (Ollama 미사용)", "INFO")
             
             result['tests_total'] = len(tests)
             
