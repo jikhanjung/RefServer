@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from retry_utils import async_retry, sync_retry, HURIDOCS_RETRY_CONFIG, RetryError
+from service_circuit_breaker import get_circuit_breaker_manager, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +40,43 @@ class HuridocsLayoutAnalyzer:
     def check_service_health(self) -> bool:
         """
         Check if Huridocs layout service is available
+        Uses circuit breaker to prevent repeated failed attempts
         
         Returns:
             bool: True if service is healthy
         """
         # Check if service is enabled
         if not getattr(self, 'enabled', True):
-            logger.info("Huridocs layout service is disabled")
+            logger.debug("Huridocs layout service is disabled")
             return False
-            
+        
         try:
+            # Use circuit breaker to manage connection attempts
+            circuit_manager = get_circuit_breaker_manager()
+            breaker = circuit_manager.get_breaker("huridocs_layout")
+            
             def check_health():
-                return requests.get(self.status_url, timeout=10)
-            
-            try:
-                response = sync_retry(check_health, config=HURIDOCS_RETRY_CONFIG)
-            except RetryError as e:
-                logger.error(f"Huridocs health check failed after retries: {e}")
-                return False
-            
-            if response.status_code == 200:
-                logger.info("Huridocs layout service is healthy")
-                return True
-            else:
-                logger.error(f"Huridocs service returned status {response.status_code}")
-                return False
+                response = sync_retry(
+                    lambda: requests.get(self.status_url, timeout=10),
+                    config=HURIDOCS_RETRY_CONFIG
+                )
                 
-        except requests.RequestException as e:
+                if response.status_code == 200:
+                    logger.debug("Huridocs layout service is healthy")
+                    return True
+                else:
+                    raise Exception(f"Huridocs service returned status {response.status_code}")
+            
+            # Execute with circuit breaker protection
+            return breaker.call(check_health)
+            
+        except CircuitBreakerOpenError as e:
+            logger.debug(f"Huridocs layout service disabled by circuit breaker: {e}")
+            return False
+        except RetryError as e:
+            logger.error(f"Huridocs health check failed after retries: {e}")
+            return False
+        except Exception as e:
             logger.error(f"Failed to connect to Huridocs service: {e}")
             return False
     

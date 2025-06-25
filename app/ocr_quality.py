@@ -8,6 +8,7 @@ from PIL import Image
 import io
 
 from retry_utils import async_retry, sync_retry, OLLAMA_RETRY_CONFIG, RetryError
+from service_circuit_breaker import get_circuit_breaker_manager, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
 
@@ -258,19 +259,27 @@ Be specific about any issues you observe and provide actionable recommendations.
                 }
             }
             
-            # Make API request with retry
+            # Make API request with circuit breaker and retry protection
             logger.info("Sending request to LLaVA...")
             
             def make_llava_request():
-                return requests.post(
-                    self.api_url,
-                    json=request_data,
-                    timeout=timeout,
-                    headers={'Content-Type': 'application/json'}
+                return sync_retry(
+                    lambda: requests.post(
+                        self.api_url,
+                        json=request_data,
+                        timeout=timeout,
+                        headers={'Content-Type': 'application/json'}
+                    ),
+                    config=OLLAMA_RETRY_CONFIG
                 )
             
             try:
-                response = sync_retry(make_llava_request, config=OLLAMA_RETRY_CONFIG)
+                circuit_manager = get_circuit_breaker_manager()
+                breaker = circuit_manager.get_breaker("ollama_llava")
+                response = breaker.call(make_llava_request)
+            except CircuitBreakerOpenError as e:
+                logger.debug(f"LLaVA request blocked by circuit breaker: {e}")
+                return self._create_default_assessment()
             except RetryError as e:
                 logger.error(f"LLaVA request failed after retries: {e}")
                 return self._create_default_assessment()
@@ -301,40 +310,50 @@ Be specific about any issues you observe and provide actionable recommendations.
     def check_ollama_connection(self) -> bool:
         """
         Check if Ollama server is accessible and LLaVA model is available
+        Uses circuit breaker to prevent repeated failed attempts
         
         Returns:
             bool: True if connection is successful
         """
+        if not self.enabled:
+            return False
+        
         try:
-            # Check server health with retry
-            health_url = f"{self.ollama_host}/api/tags"
+            # Use circuit breaker to manage connection attempts
+            circuit_manager = get_circuit_breaker_manager()
+            breaker = circuit_manager.get_breaker("ollama_llava")
             
             def check_health():
-                return requests.get(health_url, timeout=10)
-            
-            try:
-                response = sync_retry(check_health, config=OLLAMA_RETRY_CONFIG)
-            except RetryError as e:
-                logger.error(f"Ollama health check failed after retries: {e}")
-                return False
-            
-            if response.status_code == 200:
-                models_data = response.json()
-                models = [model.get('name', '') for model in models_data.get('models', [])]
+                health_url = f"{self.ollama_host}/api/tags"
+                response = sync_retry(
+                    lambda: requests.get(health_url, timeout=10), 
+                    config=OLLAMA_RETRY_CONFIG
+                )
                 
-                # Check if LLaVA model is available
-                llava_available = any('llava' in model.lower() for model in models)
-                
-                if llava_available:
-                    logger.info("Ollama connection successful, LLaVA model available")
-                    return True
+                if response.status_code == 200:
+                    models_data = response.json()
+                    models = [model.get('name', '') for model in models_data.get('models', [])]
+                    
+                    # Check if LLaVA model is available
+                    llava_available = any('llava' in model.lower() for model in models)
+                    
+                    if llava_available:
+                        logger.debug("Ollama connection successful, LLaVA model available")
+                        return True
+                    else:
+                        raise Exception(f"LLaVA model not found. Available models: {models}")
                 else:
-                    logger.error(f"LLaVA model not found. Available models: {models}")
-                    return False
-            else:
-                logger.error(f"Ollama server not responding: {response.status_code}")
-                return False
-                
+                    raise Exception(f"Ollama server not responding: HTTP {response.status_code}")
+            
+            # Execute with circuit breaker protection
+            return breaker.call(check_health)
+            
+        except CircuitBreakerOpenError as e:
+            logger.debug(f"Ollama LLaVA service disabled by circuit breaker: {e}")
+            return False
+        except RetryError as e:
+            logger.error(f"Ollama health check failed after retries: {e}")
+            return False
         except Exception as e:
             logger.error(f"Failed to connect to Ollama: {e}")
             return False

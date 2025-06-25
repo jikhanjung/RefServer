@@ -259,6 +259,17 @@ async def get_service_status():
     """Get status of all processing services"""
     try:
         status = check_all_services()
+        
+        # Add circuit breaker information
+        try:
+            from service_circuit_breaker import get_circuit_breaker_manager
+            circuit_manager = get_circuit_breaker_manager()
+            circuit_status = circuit_manager.get_all_status()
+            status['circuit_breakers'] = circuit_status
+        except Exception as e:
+            logger.warning(f"Failed to get circuit breaker status: {e}")
+            status['circuit_breakers'] = {}
+        
         return ServiceStatus(**status)
     except Exception as e:
         logger.error(f"Error getting service status: {e}")

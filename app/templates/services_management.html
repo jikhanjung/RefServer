@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block title %}Service Management - RefServer Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .service-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: white;
+    }
+    .service-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .service-name {
+        font-size: 1.25rem;
+        font-weight: bold;
+        margin: 0;
+    }
+    .service-status {
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .status-closed { background-color: #d4edda; color: #155724; }
+    .status-open { background-color: #f8d7da; color: #721c24; }
+    .status-half-open { background-color: #fff3cd; color: #856404; }
+    
+    .service-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .detail-item {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+    }
+    .detail-label {
+        font-weight: bold;
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+    }
+    .detail-value {
+        color: #495057;
+    }
+    
+    .service-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+    }
+    .btn-primary { background-color: #007bff; color: white; }
+    .btn-success { background-color: #28a745; color: white; }
+    .btn-danger { background-color: #dc3545; color: white; }
+    .btn-warning { background-color: #ffc107; color: #212529; }
+    .btn-secondary { background-color: #6c757d; color: white; }
+    .btn:hover { opacity: 0.8; }
+    
+    .alert {
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+    .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .alert-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+    
+    .no-services {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">🔧 Service Management</h4>
+                    <button onclick="refreshServices()" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if error %}
+                        <div class="alert alert-danger">
+                            <strong>Error:</strong> {{ error }}
+                        </div>
+                    {% endif %}
+
+                    <div id="services-container">
+                        {% if services_status %}
+                            {% for service_name, status in services_status.items() %}
+                                <div class="service-card" id="service-{{ service_name }}">
+                                    <div class="service-header">
+                                        <h3 class="service-name">{{ service_name.replace('_', ' ').title() }}</h3>
+                                        <span class="service-status status-{{ status.state }}">
+                                            {{ status.state.replace('_', ' ').title() }}
+                                        </span>
+                                    </div>
+
+                                    <div class="service-details">
+                                        <div class="detail-item">
+                                            <div class="detail-label">Total Calls</div>
+                                            <div class="detail-value">{{ status.total_calls }}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">Total Failures</div>
+                                            <div class="detail-value">{{ status.total_failures }}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">Current Failures</div>
+                                            <div class="detail-value">{{ status.failure_count }}</div>
+                                        </div>
+                                        <div class="detail-item">
+                                            <div class="detail-label">Success Count</div>
+                                            <div class="detail-value">{{ status.success_count }}</div>
+                                        </div>
+                                        {% if status.last_error %}
+                                        <div class="detail-item" style="grid-column: 1 / -1;">
+                                            <div class="detail-label">Last Error</div>
+                                            <div class="detail-value" style="color: #dc3545; font-family: monospace; font-size: 0.8rem;">
+                                                {{ status.last_error }}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="service-actions">
+                                        <button onclick="testService('{{ service_name }}')" class="btn btn-primary">
+                                            <i class="fas fa-play"></i> Test Connection
+                                        </button>
+                                        {% if status.state == 'closed' or status.state == 'half_open' %}
+                                            <button onclick="disableService('{{ service_name }}')" class="btn btn-danger">
+                                                <i class="fas fa-stop"></i> Disable
+                                            </button>
+                                        {% endif %}
+                                        {% if status.state == 'open' %}
+                                            <button onclick="enableService('{{ service_name }}')" class="btn btn-success">
+                                                <i class="fas fa-play"></i> Enable
+                                            </button>
+                                        {% endif %}
+                                        <button onclick="resetServiceStats('{{ service_name }}')" class="btn btn-warning">
+                                            <i class="fas fa-redo"></i> Reset Stats
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="no-services">
+                                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                                <h5>No services found</h5>
+                                <p>Circuit breaker services will appear here once they are initialized.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for disable confirmation -->
+<div class="modal fade" id="disableServiceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Disable Service</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="disableServiceForm">
+                    <input type="hidden" id="disableServiceName" name="service_name">
+                    <div class="mb-3">
+                        <label for="disableReason" class="form-label">Reason for disabling:</label>
+                        <textarea class="form-control" id="disableReason" name="reason" rows="3" 
+                                  placeholder="Enter reason for disabling this service...">Manually disabled by admin</textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDisableService()">Disable Service</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function refreshServices() {
+    try {
+        const response = await fetch('/admin/services/status');
+        if (response.ok) {
+            location.reload();
+        } else {
+            showAlert('Failed to refresh services', 'danger');
+        }
+    } catch (error) {
+        showAlert('Error refreshing services: ' + error.message, 'danger');
+    }
+}
+
+async function testService(serviceName) {
+    try {
+        showAlert('Testing connection to ' + serviceName + '...', 'warning');
+        
+        const response = await fetch(`/admin/services/${serviceName}/test`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            const success = result.test_result.success;
+            const message = success ? 
+                `✅ ${serviceName} connection successful` : 
+                `❌ ${serviceName} connection failed: ${result.test_result.error || 'Unknown error'}`;
+            
+            showAlert(message, success ? 'success' : 'danger');
+            
+            // Refresh the page to show updated circuit breaker status
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showAlert('Failed to test service: ' + result.detail, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error testing service: ' + error.message, 'danger');
+    }
+}
+
+function disableService(serviceName) {
+    document.getElementById('disableServiceName').value = serviceName;
+    document.querySelector('#disableServiceModal .modal-title').textContent = `Disable ${serviceName}`;
+    new bootstrap.Modal(document.getElementById('disableServiceModal')).show();
+}
+
+async function confirmDisableService() {
+    const serviceName = document.getElementById('disableServiceName').value;
+    const reason = document.getElementById('disableReason').value;
+    
+    try {
+        const formData = new FormData();
+        formData.append('reason', reason);
+        
+        const response = await fetch(`/admin/services/${serviceName}/disable`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('disableServiceModal')).hide();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('Failed to disable service: ' + result.detail, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error disabling service: ' + error.message, 'danger');
+    }
+}
+
+async function enableService(serviceName) {
+    try {
+        const response = await fetch(`/admin/services/${serviceName}/enable`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('Failed to enable service: ' + result.detail, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error enabling service: ' + error.message, 'danger');
+    }
+}
+
+async function resetServiceStats(serviceName) {
+    if (!confirm(`Are you sure you want to reset statistics for ${serviceName}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/services/${serviceName}/reset`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('Failed to reset stats: ' + result.detail, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error resetting stats: ' + error.message, 'danger');
+    }
+}
+
+function showAlert(message, type) {
+    // Remove existing alerts
+    const existingAlerts = document.querySelectorAll('.dynamic-alert');
+    existingAlerts.forEach(alert => alert.remove());
+    
+    // Create new alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} dynamic-alert`;
+    alertDiv.innerHTML = message;
+    
+    // Insert at the top of the card body
+    const cardBody = document.querySelector('.card-body');
+    cardBody.insertBefore(alertDiv, cardBody.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

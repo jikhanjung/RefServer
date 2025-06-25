@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import time
 
 from retry_utils import async_retry, OLLAMA_RETRY_CONFIG, RetryError
+from service_circuit_breaker import get_circuit_breaker_manager, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
 
@@ -654,32 +655,44 @@ Be concise and accurate."""
     def check_ollama_connection(self) -> bool:
         """
         Check if Ollama server is accessible and model is available
+        Uses circuit breaker to prevent repeated failed attempts
         
         Returns:
             bool: True if connection is successful
         """
-        try:
-            # Check server health
-            health_url = f"{self.ollama_host}/api/tags"
-            response = requests.get(health_url, timeout=10)
+        if not self.enabled:
+            return False
             
-            if response.status_code == 200:
-                models_data = response.json()
-                models = [model.get('name', '') for model in models_data.get('models', [])]
+        try:
+            # Use circuit breaker to manage connection attempts
+            circuit_manager = get_circuit_breaker_manager()
+            breaker = circuit_manager.get_breaker("ollama_metadata")
+            
+            def check_health():
+                health_url = f"{self.ollama_host}/api/tags"
+                response = requests.get(health_url, timeout=10)
                 
-                # Check if our model is available
-                model_available = any(self.model_name in model for model in models)
-                
-                if model_available:
-                    logger.info(f"Ollama connection successful, {self.model_name} model available")
-                    return True
+                if response.status_code == 200:
+                    models_data = response.json()
+                    models = [model.get('name', '') for model in models_data.get('models', [])]
+                    
+                    # Check if our model is available
+                    model_available = any(self.model_name in model for model in models)
+                    
+                    if model_available:
+                        logger.debug(f"Ollama connection successful, {self.model_name} model available")
+                        return True
+                    else:
+                        raise Exception(f"{self.model_name} model not found. Available models: {models}")
                 else:
-                    logger.error(f"{self.model_name} model not found. Available models: {models}")
-                    return False
-            else:
-                logger.error(f"Ollama server not responding: {response.status_code}")
-                return False
-                
+                    raise Exception(f"Ollama server not responding: HTTP {response.status_code}")
+            
+            # Execute with circuit breaker protection
+            return breaker.call(check_health)
+            
+        except CircuitBreakerOpenError as e:
+            logger.debug(f"Ollama metadata service disabled by circuit breaker: {e}")
+            return False
         except Exception as e:
             logger.error(f"Failed to connect to Ollama: {e}")
             return False

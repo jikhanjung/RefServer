@@ -15,6 +15,7 @@ from auth import AuthManager
 from db import get_paper_by_id, get_page_embeddings_by_id, db
 from vector_db import get_vector_db
 from duplicate_detector import get_duplicate_detector
+from service_circuit_breaker import get_circuit_breaker_manager
 from version import get_version
 
 
@@ -1318,6 +1319,172 @@ async def consistency_management_page(request: Request, user: AdminUser = Depend
                 "version": get_version()
             }
         )
+
+
+# Circuit Breaker Management
+@router.get("/services", response_class=HTMLResponse)
+async def services_management_page(request: Request, user: AdminUser = Depends(require_auth)):
+    """Service circuit breaker management page"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        services_status = circuit_manager.get_all_status()
+        
+        return templates.TemplateResponse(
+            "services_management.html",
+            {
+                "request": request,
+                "user": user,
+                "services_status": services_status,
+                "version": get_version()
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "services_management.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading services management: {str(e)}",
+                "version": get_version()
+            }
+        )
+
+
+@router.get("/services/status")
+async def get_services_status(user: AdminUser = Depends(require_auth)):
+    """Get current status of all circuit breakers"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        return circuit_manager.get_all_status()
+        
+    except Exception as e:
+        logger.error(f"Failed to get services status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get services status: {str(e)}")
+
+
+@router.post("/services/{service_name}/disable")
+async def disable_service(
+    service_name: str,
+    reason: str = Form("Manually disabled by admin"),
+    user: AdminUser = Depends(require_auth)
+):
+    """Manually disable a service (open circuit breaker)"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        circuit_manager.force_open_service(service_name, reason)
+        
+        return {
+            "success": True,
+            "message": f"Service '{service_name}' has been disabled",
+            "service_name": service_name,
+            "reason": reason
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to disable service {service_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to disable service: {str(e)}")
+
+
+@router.post("/services/{service_name}/enable")
+async def enable_service(
+    service_name: str,
+    user: AdminUser = Depends(require_auth)
+):
+    """Manually enable a service (close circuit breaker)"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        circuit_manager.force_close_service(service_name)
+        
+        return {
+            "success": True,
+            "message": f"Service '{service_name}' has been enabled",
+            "service_name": service_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to enable service {service_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to enable service: {str(e)}")
+
+
+@router.post("/services/{service_name}/reset")
+async def reset_service_stats(
+    service_name: str,
+    user: AdminUser = Depends(require_auth)
+):
+    """Reset statistics for a service circuit breaker"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        circuit_manager.reset_service_stats(service_name)
+        
+        return {
+            "success": True,
+            "message": f"Statistics for service '{service_name}' have been reset",
+            "service_name": service_name
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to reset stats for service {service_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset service stats: {str(e)}")
+
+
+@router.post("/services/{service_name}/test")
+async def test_service_connection(
+    service_name: str,
+    user: AdminUser = Depends(require_auth)
+):
+    """Test connection to a specific service"""
+    try:
+        circuit_manager = get_circuit_breaker_manager()
+        
+        # Get the specific service and test its connection
+        test_result = {"success": False, "error": "Unknown service"}
+        
+        if service_name == "ollama_llava":
+            from ocr_quality import get_quality_assessor
+            try:
+                assessor = get_quality_assessor()
+                test_result = {
+                    "success": assessor.check_ollama_connection(),
+                    "service_enabled": assessor.enabled,
+                    "host": assessor.ollama_host if assessor.enabled else "Disabled"
+                }
+            except Exception as e:
+                test_result = {"success": False, "error": str(e)}
+                
+        elif service_name == "ollama_metadata":
+            from metadata import get_metadata_extractor
+            try:
+                extractor = get_metadata_extractor()
+                test_result = {
+                    "success": extractor.check_ollama_connection(),
+                    "service_enabled": extractor.enabled,
+                    "host": extractor.ollama_host if extractor.enabled else "Disabled",
+                    "model": extractor.model_name if extractor.enabled else "N/A"
+                }
+            except Exception as e:
+                test_result = {"success": False, "error": str(e)}
+                
+        elif service_name == "huridocs_layout":
+            from layout import is_layout_service_available
+            try:
+                test_result = {"success": is_layout_service_available()}
+            except Exception as e:
+                test_result = {"success": False, "error": str(e)}
+        
+        # Get current circuit breaker status
+        breaker_status = circuit_manager.get_breaker(service_name).get_status()
+        
+        return {
+            "service_name": service_name,
+            "test_result": test_result,
+            "circuit_breaker_status": breaker_status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to test service {service_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to test service: {str(e)}")
 
 
 # Root redirect
