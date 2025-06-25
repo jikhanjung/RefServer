@@ -116,16 +116,6 @@ class ConfigManager:
         """윈도우 상태 반환"""
         return self.settings.value('window_state', None)
         
-    def get_test_settings(self) -> dict:
-        """테스트 관련 설정 반환"""
-        return {
-            'server_url': self.get_server_url(),
-            'timeout': self.get_connection_timeout(),
-            'admin_username': self.get_admin_credentials()[0],
-            'admin_password': self.get_admin_password_decoded(),
-            'log_level': self.get_log_level()
-        }
-        
     def reset_to_defaults(self):
         """설정을 기본값으로 리셋"""
         self.settings.clear()

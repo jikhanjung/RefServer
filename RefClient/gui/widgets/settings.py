@@ -243,8 +243,8 @@ Qt: {QT_VERSION_STR}
         self.timeout_spin.setValue(self.config_manager.get_connection_timeout())
         
         # 인증 설정
-        username, _ = self.config_manager.get_admin_credentials()
-        password = self.config_manager.get_admin_password_decoded()
+        username = self.config_manager.get_admin_username()
+        password = self.config_manager.get_admin_password()
         self.admin_username_edit.setText(username)
         self.admin_password_edit.setText(password)
         
@@ -261,10 +261,8 @@ Qt: {QT_VERSION_STR}
             self.config_manager.set_connection_timeout(self.timeout_spin.value())
             
             # 인증 설정 저장
-            self.config_manager.set_admin_credentials(
-                self.admin_username_edit.text(),
-                self.admin_password_edit.text()
-            )
+            self.config_manager.set_admin_username(self.admin_username_edit.text())
+            self.config_manager.set_admin_password(self.admin_password_edit.text())
             
             # 로그 설정 저장
             self.config_manager.set_log_level(self.log_level_combo.currentText())
