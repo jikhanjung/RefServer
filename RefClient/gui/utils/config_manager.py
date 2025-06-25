@@ -50,30 +50,30 @@ class ConfigManager:
         """연결 타임아웃 설정"""
         self.settings.setValue('connection_timeout', timeout)
         
-    def get_admin_credentials(self) -> tuple:
-        """관리자 인증 정보 반환"""
-        username = self.settings.value('admin_username', 'admin')
-        password = self.settings.value('admin_password', '')
-        return username, password
+    def get_admin_username(self) -> str:
+        """관리자 사용자명 반환"""
+        return self.settings.value('admin_username', 'admin')
         
-    def set_admin_credentials(self, username: str, password: str):
-        """관리자 인증 정보 설정"""
+    def set_admin_username(self, username: str):
+        """관리자 사용자명 설정"""
         self.settings.setValue('admin_username', username)
-        # 보안상 패스워드는 간단히 base64 인코딩만 적용
-        import base64
-        encoded_password = base64.b64encode(password.encode()).decode() if password else ''
-        self.settings.setValue('admin_password', encoded_password)
         
-    def get_admin_password_decoded(self) -> str:
-        """디코딩된 관리자 패스워드 반환"""
-        encoded_password = self.settings.value('admin_password', '')
-        if encoded_password:
-            try:
-                import base64
-                return base64.b64decode(encoded_password.encode()).decode()
-            except:
-                return ''
-        return ''
+    def get_admin_password(self) -> str:
+        """관리자 비밀번호 반환"""
+        return self.settings.value('admin_password', '')
+        
+    def set_admin_password(self, password: str):
+        """관리자 비밀번호 설정"""
+        self.settings.setValue('admin_password', password)
+        
+    def get_test_settings(self) -> dict:
+        """테스트 실행에 필요한 모든 설정 반환"""
+        return {
+            'server_url': self.get_server_url(),
+            'connection_timeout': self.get_connection_timeout(),
+            'admin_username': self.get_admin_username(),
+            'admin_password': self.get_admin_password()
+        }
         
     def get_log_level(self) -> str:
         """로그 레벨 반환"""

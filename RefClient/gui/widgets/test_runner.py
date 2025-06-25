@@ -1,18 +1,23 @@
 """
 테스트 실행 위젯
-백그라운드에서 테스트 스크립트를 실행하고 결과를 수집
+백그라운드에서 내부 테스트 모듈을 실행하고 결과를 수집
 """
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QWidget
-import subprocess
 import sys
 import os
 import time
-import threading
-import queue
 import json
 from typing import List, Dict
+
+# 내부 테스트 모듈들 import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from test_modules.health_test import HealthTest
+from test_modules.core_api_test import CoreApiTest
+from test_modules.full_api_test import FullApiTest
+from test_modules.admin_test import AdminTest
+from test_modules.backup_test import BackupTest
 
 
 class TestWorker(QObject):
@@ -34,37 +39,32 @@ class TestWorker(QObject):
         self.should_stop = False
         self.results = []
         
-        # 테스트 스크립트 매핑
-        self.test_scripts = {
+        # 테스트 클래스 매핑
+        self.test_classes = {
             'ocr_language': {
-                'name': '언어 감지 OCR',
-                'script': 'test_ocr_language_detection.py',
-                'class': 'test_ocr_language_detection',
-                'timeout': 300
+                'name': '서버 연결성',
+                'class': HealthTest,
+                'timeout': 60
             },
             'api_core': {
                 'name': '핵심 API',
-                'script': 'test_api_core.py',
-                'class': 'RefServerCoreAPITester',
-                'timeout': 600
+                'class': CoreApiTest,
+                'timeout': 300
             },
             'api_full': {
                 'name': '전체 API',
-                'script': 'test_api.py',
-                'class': 'RefServerAPITester',
-                'timeout': 900
+                'class': FullApiTest,
+                'timeout': 300
             },
             'admin_system': {
                 'name': '관리자 시스템',
-                'script': 'test_admin_system.py',
-                'class': 'RefServerAdminTester',
-                'timeout': 600
+                'class': AdminTest,
+                'timeout': 180
             },
             'backup_system': {
                 'name': '백업 시스템',
-                'script': 'test_backup_system.py',
-                'class': 'RefServerBackupTester',
-                'timeout': 900
+                'class': BackupTest,
+                'timeout': 240
             }
         }
         
@@ -84,7 +84,7 @@ class TestWorker(QObject):
                     break
                     
                 # 테스트 시작 신호
-                test_info = self.test_scripts.get(test_category)
+                test_info = self.test_classes.get(test_category)
                 if not test_info:
                     self.log_message.emit(f"알 수 없는 테스트 카테고리: {test_category}", "ERROR")
                     continue
@@ -134,7 +134,7 @@ class TestWorker(QObject):
             self.is_running = False
             
     def run_single_test(self, test_category: str, test_info: dict) -> dict:
-        """단일 테스트 실행"""
+        """단일 테스트 실행 - 내부 테스트 클래스 사용"""
         result = {
             'name': test_info['name'],
             'success': False,
@@ -144,87 +144,29 @@ class TestWorker(QObject):
         }
         
         try:
-            # 테스트 스크립트 경로 설정
-            tests_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'tests')
-            script_path = os.path.join(tests_dir, test_info['script'])
+            # 테스트 클래스 인스턴스 생성
+            test_class = test_info['class']
+            test_instance = test_class(self.config_manager)
             
-            if not os.path.exists(script_path):
-                result['error'] = f"테스트 스크립트를 찾을 수 없음: {script_path}"
-                return result
-                
-            # 테스트 설정 준비
-            test_settings = self.config_manager.get_test_settings()
+            # 테스트 인스턴스의 신호를 연결
+            test_instance.log_message.connect(self.log_message.emit)
+            test_instance.progress_update.connect(self.test_progress.emit)
             
-            # Python 스크립트 실행
-            cmd = [
-                sys.executable, script_path,
-                '--url', test_settings['server_url']
-            ]
+            self.log_message.emit(f"테스트 인스턴스 생성 완료: {test_info['name']}", "DEBUG")
             
-            # 관리자 테스트의 경우 인증 정보 추가
-            if test_category in ['admin_system', 'backup_system']:
-                cmd.extend([
-                    '--username', test_settings['admin_username'],
-                    '--password', test_settings['admin_password']
-                ])
-                
-            self.log_message.emit(f"명령어 실행: {' '.join(cmd[:3])}...", "DEBUG")
+            # 테스트 실행
+            test_result = test_instance.run_test()
             
-            # 프로세스 실행
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=tests_dir
-            )
+            # 결과 처리
+            result.update(test_result)
             
-            # 실시간 출력 읽기
-            output_lines = []
-            while True:
-                if self.should_stop:
-                    process.terminate()
-                    result['error'] = "사용자에 의해 중지됨"
-                    return result
-                    
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                    
-                if line:
-                    line = line.strip()
-                    output_lines.append(line)
-                    
-                    # 실시간 로그 전송 (중요한 라인만)
-                    if any(keyword in line.lower() for keyword in ['pass', 'fail', 'error', 'test', '✅', '❌']):
-                        log_level = "INFO"
-                        if "✅" in line or "pass" in line.lower():
-                            log_level = "PASS"
-                        elif "❌" in line or "fail" in line.lower():
-                            log_level = "FAIL"
-                        elif "error" in line.lower():
-                            log_level = "ERROR"
-                            
-                        self.log_message.emit(f"  {line}", log_level)
-                        
-            # 프로세스 완료 대기
-            return_code = process.wait(timeout=test_info['timeout'])
-            result['output'] = '\n'.join(output_lines)
+            self.log_message.emit(f"테스트 실행 완료: {test_info['name']}", "DEBUG")
             
-            # 결과 분석
-            if return_code == 0:
-                result['success'] = True
-                result['details'] = self.parse_test_output(test_category, output_lines)
-            else:
-                result['success'] = False
-                result['error'] = f"테스트 스크립트가 오류 코드 {return_code}로 종료됨"
-                
-        except subprocess.TimeoutExpired:
-            result['error'] = f"테스트 타임아웃 ({test_info['timeout']}초)"
-            if process:
-                process.kill()
+            return result
+            
         except Exception as e:
             result['error'] = f"테스트 실행 오류: {str(e)}"
+            self.log_message.emit(f"테스트 오류: {e}", "ERROR")
             
         return result
         
