@@ -4,182 +4,156 @@
 
 {% block extra_css %}
 <style>
-    .service-card {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-        background: white;
+    .status-closed { 
+        background-color: #d1ecf1; 
+        color: #0c5460; 
+        border: 1px solid #bee5eb;
     }
-    .service-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
+    .status-open { 
+        background-color: #f8d7da; 
+        color: #721c24; 
+        border: 1px solid #f5c6cb;
     }
-    .service-name {
-        font-size: 1.25rem;
-        font-weight: bold;
-        margin: 0;
+    .status-half-open { 
+        background-color: #fff3cd; 
+        color: #856404; 
+        border: 1px solid #ffeaa7;
     }
-    .service-status {
-        padding: 4px 12px;
-        border-radius: 4px;
-        font-size: 0.9rem;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
-    .status-closed { background-color: #d4edda; color: #155724; }
-    .status-open { background-color: #f8d7da; color: #721c24; }
-    .status-half-open { background-color: #fff3cd; color: #856404; }
     
-    .service-details {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .detail-item {
-        background: #f8f9fa;
-        padding: 10px;
-        border-radius: 4px;
-    }
-    .detail-label {
-        font-weight: bold;
+    .service-metric {
+        font-size: 0.875rem;
         color: #6c757d;
-        font-size: 0.9rem;
-        margin-bottom: 4px;
     }
-    .detail-value {
+    
+    .service-metric-value {
+        font-weight: bold;
         color: #495057;
+        font-size: 1.1rem;
     }
     
-    .service-actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
+    .last-error-box {
+        background-color: #f8f9fa;
+        border-left: 4px solid #dc3545;
+        padding: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.8rem;
+        word-break: break-all;
+        max-height: 60px;
+        overflow-y: auto;
     }
-    .btn {
-        padding: 8px 16px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        text-decoration: none;
-        display: inline-block;
-        text-align: center;
-    }
-    .btn-primary { background-color: #007bff; color: white; }
-    .btn-success { background-color: #28a745; color: white; }
-    .btn-danger { background-color: #dc3545; color: white; }
-    .btn-warning { background-color: #ffc107; color: #212529; }
-    .btn-secondary { background-color: #6c757d; color: white; }
-    .btn:hover { opacity: 0.8; }
-    
-    .alert {
-        padding: 12px;
-        border-radius: 4px;
-        margin-bottom: 20px;
-    }
-    .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .alert-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
     
     .no-services {
         text-align: center;
-        padding: 40px;
+        padding: 60px 20px;
         color: #6c757d;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">🔧 Service Management</h4>
-                    <button onclick="refreshServices()" class="btn btn-primary">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
-                </div>
-                <div class="card-body">
-                    {% if error %}
-                        <div class="alert alert-danger">
-                            <strong>Error:</strong> {{ error }}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🔧 Service Management</h2>
+        <button onclick="refreshServices()" class="btn btn-primary">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    {% if error %}
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> {{ error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endif %}
+
+    <div id="services-container">
+        {% if services_status %}
+            <div class="row">
+                {% for service_name, status in services_status.items() %}
+                <div class="col-lg-6 col-xl-4 mb-4">
+                    <div class="card h-100" id="service-{{ service_name }}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-cog me-2"></i>{{ service_name.replace('_', ' ').title() }}
+                            </h5>
+                            <span class="badge status-{{ status.state }} px-3 py-2">
+                                {% if status.state == 'closed' %}
+                                    <i class="fas fa-check-circle me-1"></i>{{ status.state.replace('_', ' ').title() }}
+                                {% elif status.state == 'open' %}
+                                    <i class="fas fa-exclamation-circle me-1"></i>{{ status.state.replace('_', ' ').title() }}
+                                {% else %}
+                                    <i class="fas fa-clock me-1"></i>{{ status.state.replace('_', ' ').title() }}
+                                {% endif %}
+                            </span>
                         </div>
-                    {% endif %}
-
-                    <div id="services-container">
-                        {% if services_status %}
-                            {% for service_name, status in services_status.items() %}
-                                <div class="service-card" id="service-{{ service_name }}">
-                                    <div class="service-header">
-                                        <h3 class="service-name">{{ service_name.replace('_', ' ').title() }}</h3>
-                                        <span class="service-status status-{{ status.state }}">
-                                            {{ status.state.replace('_', ' ').title() }}
-                                        </span>
-                                    </div>
-
-                                    <div class="service-details">
-                                        <div class="detail-item">
-                                            <div class="detail-label">Total Calls</div>
-                                            <div class="detail-value">{{ status.total_calls }}</div>
-                                        </div>
-                                        <div class="detail-item">
-                                            <div class="detail-label">Total Failures</div>
-                                            <div class="detail-value">{{ status.total_failures }}</div>
-                                        </div>
-                                        <div class="detail-item">
-                                            <div class="detail-label">Current Failures</div>
-                                            <div class="detail-value">{{ status.failure_count }}</div>
-                                        </div>
-                                        <div class="detail-item">
-                                            <div class="detail-label">Success Count</div>
-                                            <div class="detail-value">{{ status.success_count }}</div>
-                                        </div>
-                                        {% if status.last_error %}
-                                        <div class="detail-item" style="grid-column: 1 / -1;">
-                                            <div class="detail-label">Last Error</div>
-                                            <div class="detail-value" style="color: #dc3545; font-family: monospace; font-size: 0.8rem;">
-                                                {{ status.last_error }}
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="service-actions">
-                                        <button onclick="testService('{{ service_name }}')" class="btn btn-primary">
-                                            <i class="fas fa-play"></i> Test Connection
-                                        </button>
-                                        {% if status.state == 'closed' or status.state == 'half_open' %}
-                                            <button onclick="disableService('{{ service_name }}')" class="btn btn-danger">
-                                                <i class="fas fa-stop"></i> Disable
-                                            </button>
-                                        {% endif %}
-                                        {% if status.state == 'open' %}
-                                            <button onclick="enableService('{{ service_name }}')" class="btn btn-success">
-                                                <i class="fas fa-play"></i> Enable
-                                            </button>
-                                        {% endif %}
-                                        <button onclick="resetServiceStats('{{ service_name }}')" class="btn btn-warning">
-                                            <i class="fas fa-redo"></i> Reset Stats
-                                        </button>
-                                    </div>
+                        
+                        <div class="card-body">
+                            <div class="row text-center mb-3">
+                                <div class="col-6">
+                                    <div class="service-metric">Total Calls</div>
+                                    <div class="service-metric-value">{{ status.total_calls }}</div>
                                 </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="no-services">
-                                <i class="fas fa-info-circle fa-3x mb-3"></i>
-                                <h5>No services found</h5>
-                                <p>Circuit breaker services will appear here once they are initialized.</p>
+                                <div class="col-6">
+                                    <div class="service-metric">Total Failures</div>
+                                    <div class="service-metric-value text-danger">{{ status.total_failures }}</div>
+                                </div>
                             </div>
-                        {% endif %}
+                            
+                            <div class="row text-center mb-3">
+                                <div class="col-6">
+                                    <div class="service-metric">Current Failures</div>
+                                    <div class="service-metric-value">{{ status.failure_count }}</div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="service-metric">Success Count</div>
+                                    <div class="service-metric-value text-success">{{ status.success_count }}</div>
+                                </div>
+                            </div>
+
+                            {% if status.last_error %}
+                            <div class="mb-3">
+                                <div class="service-metric">Last Error:</div>
+                                <div class="last-error-box">
+                                    {{ status.last_error }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button onclick="testService('{{ service_name }}')" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-play"></i> Test
+                                </button>
+                                {% if status.state == 'closed' or status.state == 'half_open' %}
+                                    <button onclick="disableService('{{ service_name }}')" class="btn btn-outline-danger btn-sm">
+                                        <i class="fas fa-stop"></i> Disable
+                                    </button>
+                                {% endif %}
+                                {% if status.state == 'open' %}
+                                    <button onclick="enableService('{{ service_name }}')" class="btn btn-outline-success btn-sm">
+                                        <i class="fas fa-play"></i> Enable
+                                    </button>
+                                {% endif %}
+                                <button onclick="resetServiceStats('{{ service_name }}')" class="btn btn-outline-warning btn-sm">
+                                    <i class="fas fa-redo"></i> Reset
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-        </div>
+        {% else %}
+            <div class="no-services">
+                <div class="text-center">
+                    <i class="fas fa-info-circle fa-3x mb-3 text-muted"></i>
+                    <h5 class="text-muted">No services found</h5>
+                    <p class="text-muted mb-0">Circuit breaker services will appear here once they are initialized.</p>
+                </div>
+            </div>
+        {% endif %}
     </div>
 </div>
 
