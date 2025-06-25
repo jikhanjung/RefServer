@@ -218,7 +218,7 @@ class LayoutInfo(BaseModel):
 async def startup_event():
     """Check services on startup"""
     try:
-        logger.info("🚀 Starting RefServer v0.1.10...")
+        logger.info(f"🚀 Starting RefServer {get_version()}...")
         
         # Initialize ChromaDB
         try:
@@ -241,7 +241,7 @@ async def startup_event():
         except Exception as scheduler_error:
             logger.error(f"❌ Background scheduler startup failed: {scheduler_error}")
         
-        logger.info("✅ RefServer v0.1.10 startup completed")
+        logger.info(f"✅ RefServer {get_version()} startup completed")
         
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")
@@ -1094,7 +1094,7 @@ async def get_vector_db_stats():
         return {
             "chromadb_stats": stats,
             "health_status": "healthy" if health else "unhealthy",
-            "version": "v0.1.10"
+            "version": get_version()
         }
         
     except Exception as e:

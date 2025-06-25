@@ -1,0 +1,12 @@
+# RefClient GUI Dependencies
+PyQt6>=6.7.0
+PyQt6-Qt6>=6.7.0
+
+# HTTP requests for API testing
+requests>=2.31.0
+
+# Plotting and visualization
+matplotlib>=3.7.0
+
+# Additional utilities
+reportlab>=4.0.0  # For test PDF generation

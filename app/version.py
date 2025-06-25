@@ -31,11 +31,11 @@ def get_version():
             return version
         
         # Fallback version if file not found in either location
-        return 'v0.1.11'
+        return 'v0.1.12'
             
     except Exception:
         # Fallback version on any error
-        return 'v0.1.11'
+        return 'v0.1.12'
 
 def get_version_info():
     """
