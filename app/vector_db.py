@@ -96,13 +96,19 @@ class ChromaVectorDB:
             bool: True if successful, False otherwise
         """
         try:
-            # Prepare metadata
+            # Prepare metadata - filter out None values
             paper_metadata = metadata or {}
-            paper_metadata.update({
+            
+            # Remove None values from metadata (ChromaDB doesn't support None)
+            filtered_metadata = {k: v for k, v in paper_metadata.items() if v is not None}
+            
+            filtered_metadata.update({
                 'doc_id': doc_id,
                 'embedding_type': 'document',
                 'created_at': time.time()
             })
+            
+            logger.debug(f"Filtered metadata for {doc_id}: {filtered_metadata}")
             
             # Remove existing embedding if exists
             try:
@@ -114,7 +120,7 @@ class ChromaVectorDB:
             self.papers_collection.add(
                 ids=[doc_id],
                 embeddings=[embedding],
-                metadatas=[paper_metadata]
+                metadatas=[filtered_metadata]
             )
             
             logger.info(f"Added paper embedding for document {doc_id}")
@@ -135,49 +141,84 @@ class ChromaVectorDB:
         Returns:
             bool: True if successful, False otherwise
         """
+        logger.info(f"🔄 ChromaDB add_page_embeddings called for {doc_id}")
+        logger.info(f"📊 Input: {len(page_embeddings)} page embeddings")
+        
         try:
             if not page_embeddings:
-                logger.warning(f"No page embeddings provided for document {doc_id}")
+                logger.warning(f"❌ No page embeddings provided for document {doc_id}")
                 return False
             
+            # Log input validation
+            logger.debug(f"📄 First page embedding preview: page_number={page_embeddings[0].get('page_number')}, text_length={len(page_embeddings[0].get('text', ''))}, embedding_length={len(page_embeddings[0].get('embedding', []))}")
+            
             # Remove existing page embeddings for this document
+            logger.info(f"🗑️ Removing existing page embeddings for {doc_id}")
             try:
                 existing_ids = [f"{doc_id}_page_{i+1}" for i in range(100)]  # Assume max 100 pages
                 self.pages_collection.delete(ids=existing_ids)
-            except:
-                pass  # Collection might be empty
+                logger.debug(f"🗑️ Attempted to delete existing page IDs for {doc_id}")
+            except Exception as delete_error:
+                logger.debug(f"🗑️ Delete operation error (expected if no existing data): {delete_error}")
             
             # Prepare batch data
             ids = []
             embeddings = []
             metadatas = []
             
-            for page_data in page_embeddings:
-                page_id = f"{doc_id}_page_{page_data['page_number']}"
+            logger.info(f"📝 Preparing batch data for ChromaDB insertion")
+            for i, page_data in enumerate(page_embeddings):
+                page_number = page_data['page_number']
+                page_id = f"{doc_id}_page_{page_number}"
+                
+                logger.debug(f"📄 Preparing page {page_number}: ID={page_id}")
+                
                 ids.append(page_id)
                 embeddings.append(page_data['embedding'])
                 
+                # Prepare metadata - filter out None values
                 metadata = {
                     'doc_id': doc_id,
-                    'page_number': page_data['page_number'],
+                    'page_number': page_number,
                     'text_preview': page_data.get('text', '')[:500],  # First 500 chars
                     'embedding_type': 'page',
                     'created_at': time.time()
                 }
-                metadatas.append(metadata)
+                
+                # Remove None values from metadata (ChromaDB doesn't support None)
+                filtered_metadata = {k: v for k, v in metadata.items() if v is not None}
+                metadatas.append(filtered_metadata)
+                
+                logger.debug(f"📄 Page {page_number} metadata: {filtered_metadata}")
+            
+            logger.info(f"📊 Prepared batch data: {len(ids)} IDs, {len(embeddings)} embeddings, {len(metadatas)} metadata entries")
+            
+            # Validate data consistency
+            if not (len(ids) == len(embeddings) == len(metadatas)):
+                logger.error(f"❌ Data length mismatch: IDs={len(ids)}, embeddings={len(embeddings)}, metadatas={len(metadatas)}")
+                return False
             
             # Batch insert
+            logger.info(f"💾 Executing ChromaDB batch insert for {doc_id}")
             self.pages_collection.add(
                 ids=ids,
                 embeddings=embeddings,
                 metadatas=metadatas
             )
             
-            logger.info(f"Added {len(page_embeddings)} page embeddings for document {doc_id}")
+            logger.info(f"✅ Added {len(page_embeddings)} page embeddings for document {doc_id}")
+            
+            # Verify insertion by checking collection count
+            try:
+                collection_count = self.pages_collection.count()
+                logger.info(f"📊 Pages collection now has {collection_count} total documents")
+            except Exception as count_error:
+                logger.warning(f"⚠️ Failed to get collection count: {count_error}")
+            
             return True
             
         except Exception as e:
-            logger.error(f"Failed to add page embeddings for {doc_id}: {e}")
+            logger.error(f"❌ Failed to add page embeddings for {doc_id}: {e}", exc_info=True)
             return False
     
     def find_similar_papers(self, query_embedding: List[float], n_results: int = 10, 

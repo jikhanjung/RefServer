@@ -129,6 +129,15 @@ RefServer/
 |--------|-----------------------------|------|
 | GET    | `/admin/disaster-recovery/status` | 재해 복구 준비도 평가 |
 
+### 🎨 Enhanced Admin Interface (v0.1.13)
+| Method | Endpoint                    | 설명 |
+|--------|-----------------------------|------|
+| GET    | `/admin/layout-analysis`    | 레이아웃 분석 관리 대시보드 |
+| GET    | `/admin/layout-analysis/{id}` | 개별 레이아웃 분석 상세보기 |
+| GET    | `/admin/page-viewer`        | PDF 페이지 시각화 뷰어 |
+| GET    | `/admin/security`           | 보안 설정 관리 (superuser 전용) |
+| GET    | `/admin/database`           | 데이터베이스 관리 (superuser 전용) |
+
 ---
 
 ## 🧩 사용 기술
@@ -404,4 +413,4 @@ brew install poppler
 - **[ROADMAP.md](./ROADMAP.md)**: 향후 개발 계획 및 로드맵
 - **[tests/TESTING_GUIDE.md](./tests/TESTING_GUIDE.md)**: 종합 테스트 가이드 및 성공 기준
 
-현재 상태: **v0.1.12+** - 엔터프라이즈급 백업 시스템, 재해 복구, 데이터베이스 일관성 검증, 종합 테스트 PDF 생성기, 외부 JSON 템플릿 시스템 완비
+현재 상태: **v0.1.13** - 관리자 대시보드 확장, 5개 새로운 관리 페이지, 레이아웃 분석/보안 설정/데이터베이스 관리 UI, 권한 기반 접근 제어 (진행 중)

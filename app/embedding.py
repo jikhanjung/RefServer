@@ -341,31 +341,58 @@ def compute_document_embedding_from_pages(page_embeddings: List[np.ndarray]) -> 
     Returns:
         np.ndarray: averaged document embedding vector (1024 dimensions)
     """
+    logger.info(f"📄 Computing document embedding from {len(page_embeddings)} page embeddings")
+    
     if not page_embeddings:
         logger.warning("Empty page embeddings provided")
         return np.zeros(1024, dtype=np.float32)
     
     try:
+        # Log input details
+        logger.debug(f"Input page embeddings count: {len(page_embeddings)}")
+        logger.debug(f"First page embedding shape: {page_embeddings[0].shape if page_embeddings else 'N/A'}")
+        logger.debug(f"First page embedding sample: {page_embeddings[0][:5] if page_embeddings else 'N/A'}")
+        
         # Filter out zero vectors
-        valid_embeddings = [emb for emb in page_embeddings if np.any(emb)]
+        valid_embeddings = []
+        zero_count = 0
+        for i, emb in enumerate(page_embeddings):
+            if np.any(emb):
+                valid_embeddings.append(emb)
+                logger.debug(f"Page {i+1}: Valid embedding (norm={np.linalg.norm(emb):.4f})")
+            else:
+                zero_count += 1
+                logger.debug(f"Page {i+1}: Zero embedding (skipped)")
+        
+        logger.info(f"Valid embeddings: {len(valid_embeddings)}, Zero embeddings: {zero_count}")
         
         if not valid_embeddings:
-            logger.warning("No valid page embeddings found")
+            logger.warning("No valid page embeddings found - all were zero vectors")
             return np.zeros(1024, dtype=np.float32)
         
         # Compute average
         averaged_embedding = np.mean(valid_embeddings, axis=0)
+        logger.debug(f"Raw averaged embedding shape: {averaged_embedding.shape}")
+        logger.debug(f"Raw averaged embedding norm: {np.linalg.norm(averaged_embedding):.6f}")
+        logger.debug(f"Raw averaged embedding sample: {averaged_embedding[:5]}")
         
         # Normalize
         norm = np.linalg.norm(averaged_embedding)
         if norm > 0:
             averaged_embedding = averaged_embedding / norm
+            logger.info(f"✅ Normalized document embedding (norm was {norm:.6f})")
+        else:
+            logger.warning("Document embedding norm is zero - cannot normalize")
         
-        logger.info(f"Computed document embedding from {len(valid_embeddings)} page embeddings")
-        return averaged_embedding.astype(np.float32)
+        final_embedding = averaged_embedding.astype(np.float32)
+        logger.info(f"✅ Computed document embedding from {len(valid_embeddings)} page embeddings")
+        logger.debug(f"Final embedding shape: {final_embedding.shape}, dtype: {final_embedding.dtype}")
+        logger.debug(f"Final embedding sample: {final_embedding[:5]}")
+        
+        return final_embedding
         
     except Exception as e:
-        logger.error(f"Error computing document embedding from pages: {e}")
+        logger.error(f"Error computing document embedding from pages: {e}", exc_info=True)
         return np.zeros(1024, dtype=np.float32)
 
 def compute_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
@@ -414,7 +441,18 @@ def save_paper_embedding_to_vectordb(doc_id: str, embedding: np.ndarray, metadat
     Returns:
         bool: True if successful
     """
+    logger.info(f"💾 Saving document embedding to ChromaDB for doc_id: {doc_id}")
+    
     try:
+        # Validate embedding
+        if embedding is None or len(embedding) == 0:
+            logger.error(f"Invalid embedding for {doc_id}: None or empty")
+            return False
+        
+        logger.debug(f"Embedding shape: {embedding.shape}, dtype: {embedding.dtype}")
+        logger.debug(f"Embedding norm: {np.linalg.norm(embedding):.6f}")
+        logger.debug(f"Embedding sample: {embedding[:5]}")
+        
         vector_db = get_vector_db()
         
         # Prepare metadata
@@ -422,21 +460,29 @@ def save_paper_embedding_to_vectordb(doc_id: str, embedding: np.ndarray, metadat
         if 'embedding_type' not in paper_metadata:
             paper_metadata['embedding_type'] = 'document'
         
+        logger.debug(f"Metadata for ChromaDB: {paper_metadata}")
+        
+        # Convert to list for ChromaDB
+        embedding_list = embedding.tolist()
+        logger.debug(f"Converted to list, length: {len(embedding_list)}")
+        
         success = vector_db.add_paper_embedding(
             doc_id=doc_id,
-            embedding=embedding.tolist(),
+            embedding=embedding_list,
             metadata=paper_metadata
         )
         
         if success:
-            logger.info(f"✅ Paper embedding saved to ChromaDB: {doc_id}")
+            logger.info(f"✅ Paper embedding saved to ChromaDB successfully: {doc_id}")
+            logger.debug(f"ChromaDB save operation completed for {doc_id}")
         else:
             logger.error(f"❌ Failed to save paper embedding to ChromaDB: {doc_id}")
+            logger.error(f"ChromaDB add_paper_embedding returned False for {doc_id}")
         
         return success
         
     except Exception as e:
-        logger.error(f"Error saving paper embedding to ChromaDB for {doc_id}: {e}")
+        logger.error(f"Error saving paper embedding to ChromaDB for {doc_id}: {e}", exc_info=True)
         return False
 
 def save_page_embeddings_to_vectordb(doc_id: str, page_embeddings_data: List[tuple]) -> bool:
@@ -450,29 +496,69 @@ def save_page_embeddings_to_vectordb(doc_id: str, page_embeddings_data: List[tup
     Returns:
         bool: True if successful
     """
+    logger.info(f"🔄 Starting ChromaDB page embeddings save for doc_id: {doc_id}")
+    logger.info(f"📊 Input data: {len(page_embeddings_data)} page embeddings")
+    
     try:
         vector_db = get_vector_db()
+        logger.debug(f"🔌 ChromaDB connection obtained: {type(vector_db)}")
+        
+        # Validate input data
+        if not page_embeddings_data:
+            logger.error(f"❌ Empty page embeddings data for {doc_id}")
+            return False
         
         # Prepare page embeddings for ChromaDB
         page_data = []
-        for page_number, page_text, embedding_vector in page_embeddings_data:
+        for i, (page_number, page_text, embedding_vector) in enumerate(page_embeddings_data):
+            logger.debug(f"📄 Processing page {page_number}: text length={len(page_text) if page_text else 0}, embedding shape={embedding_vector.shape if hasattr(embedding_vector, 'shape') else type(embedding_vector)}")
+            
+            # Validate embedding
+            if embedding_vector is None:
+                logger.error(f"❌ None embedding for page {page_number} in {doc_id}")
+                continue
+                
+            if hasattr(embedding_vector, 'tolist'):
+                embedding_list = embedding_vector.tolist()
+            else:
+                embedding_list = list(embedding_vector)
+                
+            logger.debug(f"📄 Page {page_number}: embedding converted to list, length={len(embedding_list)}")
+            
             page_data.append({
                 'page_number': page_number,
-                'text': page_text,
-                'embedding': embedding_vector.tolist()
+                'text': page_text[:500] if page_text else '',  # Truncate text for metadata
+                'embedding': embedding_list
             })
         
+        logger.info(f"📊 Prepared {len(page_data)} valid page data entries for ChromaDB")
+        
+        if not page_data:
+            logger.error(f"❌ No valid page data prepared for {doc_id}")
+            return False
+        
+        # Call ChromaDB save
+        logger.info(f"💾 Calling ChromaDB add_page_embeddings for {doc_id}")
         success = vector_db.add_page_embeddings(doc_id, page_data)
         
         if success:
             logger.info(f"✅ {len(page_data)} page embeddings saved to ChromaDB: {doc_id}")
+            
+            # Verify the save by checking count
+            try:
+                stats = vector_db.get_collection_stats()
+                logger.info(f"📊 ChromaDB stats after save: {stats}")
+            except Exception as stats_error:
+                logger.warning(f"⚠️ Failed to get ChromaDB stats: {stats_error}")
+                
         else:
             logger.error(f"❌ Failed to save page embeddings to ChromaDB: {doc_id}")
+            logger.error(f"❌ ChromaDB add_page_embeddings returned False")
         
         return success
         
     except Exception as e:
-        logger.error(f"Error saving page embeddings to ChromaDB for {doc_id}: {e}")
+        logger.error(f"❌ Exception in save_page_embeddings_to_vectordb for {doc_id}: {e}", exc_info=True)
         return False
 
 def get_paper_embedding_from_vectordb(doc_id: str) -> Optional[np.ndarray]:

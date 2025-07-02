@@ -6,6 +6,7 @@ import shutil
 from typing import Dict, Optional, Tuple
 from pathlib import Path
 import time
+import numpy as np
 
 # Import all processing modules
 from ocr import process_pdf_with_ocr, extract_page_texts_from_pdf
@@ -253,9 +254,11 @@ class PDFProcessingPipeline:
                                 logger.info(f"Saved {len(page_embeddings_data)} page embeddings")
                                 
                                 # Compute document-level embedding as average of page embeddings
+                                logger.info(f"🧮 Computing document embedding from {len(page_embeddings)} page embeddings for {doc_id}")
                                 document_embedding = compute_document_embedding_from_pages(page_embeddings)
                                 
                                 if document_embedding is not None and len(document_embedding) > 0:
+                                    logger.info(f"✅ Document embedding computed successfully for {doc_id}: shape={document_embedding.shape}, norm={np.linalg.norm(document_embedding):.6f}")
                                     # Compute content ID for deduplication
                                     content_id = compute_content_id(document_embedding)
                                     
@@ -295,9 +298,12 @@ class PDFProcessingPipeline:
                                     else:
                                         # No duplicate found or same document - proceed normally
                                         # Save document-level embedding to ChromaDB
+                                        logger.info(f"💾 Saving document embedding to ChromaDB for {doc_id}")
+                                        logger.debug(f"Document embedding details - shape: {document_embedding.shape}, content_id: {content_id}")
                                         embedding_success = save_embedding(doc_id, document_embedding)
                                         
                                         if embedding_success:
+                                            logger.info(f"✅ Document embedding save successful for {doc_id}")
                                             # Update paper with content_id (safe since no duplicate exists)
                                             paper = save_paper(doc_id, filename, str(pdf_final_path), content_id)
                                             
@@ -312,8 +318,11 @@ class PDFProcessingPipeline:
                                             logger.info(f"✅ Document embedding generated and saved to ChromaDB: {len(document_embedding)} dimensions")
                                         else:
                                             result['warnings'].append("Failed to save embedding to ChromaDB")
-                                            logger.warning(f"⚠️ Failed to save embedding to ChromaDB for {doc_id}")
+                                            logger.error(f"❌ Failed to save embedding to ChromaDB for {doc_id}")
+                                            logger.error(f"save_embedding returned False - check ChromaDB connection and vector_db logs")
                                 else:
+                                    logger.error(f"❌ Failed to generate valid document embedding from pages for {doc_id}")
+                                    logger.error(f"Document embedding details: {document_embedding is not None}, length: {len(document_embedding) if document_embedding is not None else 0}")
                                     raise Exception("Failed to generate valid document embedding from pages")
                             else:
                                 raise Exception("Failed to save page embeddings")

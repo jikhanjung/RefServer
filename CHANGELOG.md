@@ -1,5 +1,26 @@
 # 📅 Changelog
 
+- **2025-07-02 (v0.1.13 - 진행 중)**
+    - **🎨 관리자 대시보드 확장 및 새로운 관리 페이지 개발**
+        - **5개 새로운 관리 페이지 추가**:
+            - **`database_management.html`**: 데이터베이스 관리 전용 (Superuser 전용)
+            - **`layout_analysis.html`**: 레이아웃 분석 관리 및 통계
+            - **`layout_analysis_detail.html`**: 개별 레이아웃 분석 상세보기
+            - **`page_viewer.html`**: PDF 페이지 시각화 뷰어
+            - **`security_settings.html`**: 보안 설정 관리 (Superuser 전용)
+        - **관리자 대시보드 네비게이션 확장**:
+            - **새로운 버튼 5개**: Layout Analysis, Backup & Restore, Data Consistency, Security Settings, Database Management
+            - **권한 기반 접근 제어**: 일반 사용자 vs Superuser 구분
+            - **직관적인 아이콘**: FontAwesome 아이콘으로 기능별 시각적 구분
+        - **백엔드 로직 개선**:
+            - **`admin.py`**: 페이지 임베딩 목록 처리 로직 개선, 새로운 import 추가
+            - **관련 모듈 업데이트**: `consistency_check.py`, `embedding.py`, `file_security.py`, `layout.py`, `pipeline.py`, `vector_db.py`
+        - **Docker 설정 업데이트**:
+            - **CPU 전용 환경 개선**: `docker-compose.cpu.yml`, `docker-compose.cpu.prod.yml` 수정
+        - **Huridocs Layout 분석 이슈 진단**:
+            - **문제 원인 파악**: Docker 환경에서 GPU 감지 실패로 인한 훈련 모드 실행
+            - **해결 방안 제시**: `CUDA_VISIBLE_DEVICES=-1` 환경변수로 GPU 완전 비활성화
+
 - **2025-06-23**
     - **📄 테스트 PDF 내용 관리 시스템 개선**
         - **외부 JSON 템플릿 시스템**: PDF 내용을 `paper_templates.json`으로 외부화

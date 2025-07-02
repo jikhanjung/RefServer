@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}Page {{ page_number }} - {{ paper.filename }}{% endblock %}
+{% block header %}Page Viewer{% endblock %}
+
+{% block actions %}
+<div class="btn-group" role="group">
+    <a href="/admin/page-embeddings/{{ paper.doc_id }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Embeddings
+    </a>
+    <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-info">
+        <i class="fas fa-file-alt me-2"></i>View Paper
+    </a>
+    <button type="button" class="btn btn-outline-primary" onclick="downloadPageImage()">
+        <i class="fas fa-download me-2"></i>Download Image
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Paper Information Header -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card border-primary">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h5 class="card-title mb-1">
+                            <i class="fas fa-file-pdf text-danger me-2"></i>{{ paper.filename }}
+                        </h5>
+                        <p class="card-text text-muted mb-0">
+                            <strong>Document ID:</strong> <code>{{ paper.doc_id }}</code> | 
+                            <strong>Page:</strong> {{ page_number }}
+                            {% if page_embedding %}
+                            | <strong>Text Length:</strong> {{ page_embedding.page_text|length if page_embedding.page_text else 0 }} chars
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        {% if page_embedding %}
+                        <span class="badge bg-success fs-6">
+                            <i class="fas fa-layer-group me-1"></i>Embedding Available
+                        </span>
+                        {% else %}
+                        <span class="badge bg-warning fs-6">
+                            <i class="fas fa-exclamation-triangle me-1"></i>No Embedding
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading indicator -->
+<div id="loading-indicator" class="text-center py-4">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading page image...</span>
+    </div>
+    <p class="text-muted mt-2">Loading page image...</p>
+</div>
+
+<!-- Main Content -->
+<div class="row d-flex flex-row" id="main-content" style="display: none;">
+    <!-- PDF Page Image -->
+    <div class="col-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-image me-2"></i>Page {{ page_number }} Image
+                </h5>
+            </div>
+            <div class="card-body text-center p-2">
+                <div class="border rounded p-2" style="background-color: #f8f9fa; overflow: auto; max-height: 800px;">
+                    <img id="page-image" 
+                         class="img-fluid" 
+                         style="box-shadow: 0 4px 8px rgba(0,0,0,0.1);"
+                         alt="Page {{ page_number }}">
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="zoomIn()">
+                        <i class="fas fa-search-plus"></i> Zoom In
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="zoomOut()">
+                        <i class="fas fa-search-minus"></i> Zoom Out
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="resetZoom()">
+                        <i class="fas fa-compress-arrows-alt"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Extracted Text -->
+    <div class="col-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-font me-2"></i>Extracted Text
+                    {% if page_embedding and page_embedding.page_text %}
+                    <span class="badge bg-info ms-2">{{ page_embedding.page_text|length }} chars</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body p-2">
+                {% if page_embedding and page_embedding.page_text %}
+                <div class="border rounded p-3" style="background-color: #f8f9fa; height: 600px; overflow-y: auto;">
+                    <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9em; line-height: 1.4;">{{ page_embedding.page_text }}</pre>
+                </div>
+                
+                <!-- Text Statistics -->
+                <div class="mt-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <small class="text-muted">Characters</small>
+                            <br><strong>{{ page_embedding.page_text|length }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Words</small>
+                            <br><strong>{{ page_embedding.page_text.split()|length }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Lines</small>
+                            <br><strong>{{ page_embedding.page_text.split('\n')|length }}</strong>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Actions -->
+                <div class="mt-3 d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="copyText()">
+                        <i class="fas fa-copy me-2"></i>Copy Text
+                    </button>
+                    <button class="btn btn-outline-success" onclick="downloadText()">
+                        <i class="fas fa-download me-2"></i>Download as TXT
+                    </button>
+                </div>
+                
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-exclamation-circle fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Text Available</h5>
+                    <p class="text-muted">
+                        {% if page_embedding %}
+                        This page has an embedding but no extracted text.
+                        {% else %}
+                        This page has not been processed for text extraction yet.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Display -->
+<div id="error-display" class="alert alert-danger d-none" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <span id="error-message"></span>
+</div>
+
+<!-- Success Messages -->
+<div id="success-message" class="alert alert-success d-none" role="alert">
+    <i class="fas fa-check-circle me-2"></i>
+    <span id="success-text"></span>
+</div>
+
+<style>
+#page-image {
+    transition: transform 0.2s ease;
+    cursor: zoom-in;
+}
+
+.zoom-in {
+    cursor: zoom-out !important;
+}
+</style>
+
+<script>
+let currentZoom = 1;
+const zoomStep = 0.2;
+const maxZoom = 3;
+const minZoom = 0.5;
+
+// Define functions first
+function hideLoading() {
+    console.log('hideLoading called');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const mainContent = document.getElementById('main-content');
+    
+    if (loadingIndicator) {
+        console.log('Hiding loading indicator');
+        loadingIndicator.style.display = 'none';
+    } else {
+        console.error('Loading indicator not found');
+    }
+    
+    if (mainContent) {
+        console.log('Showing main content');
+        mainContent.style.display = 'block';
+    } else {
+        console.error('Main content not found');
+    }
+}
+
+function showImageError() {
+    console.log('showImageError called');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+    showError('Failed to load page image. The PDF file may be corrupted or the page number may not exist.');
+}
+
+function showError(message) {
+    document.getElementById('error-message').textContent = message;
+    document.getElementById('error-display').classList.remove('d-none');
+    document.getElementById('success-message').classList.add('d-none');
+    setTimeout(() => {
+        document.getElementById('error-display').classList.add('d-none');
+    }, 5000);
+}
+
+function showSuccess(message) {
+    document.getElementById('success-text').textContent = message;
+    document.getElementById('success-message').classList.remove('d-none');
+    document.getElementById('error-display').classList.add('d-none');
+    setTimeout(() => {
+        document.getElementById('success-message').classList.add('d-none');
+    }, 3000);
+}
+
+// Load image directly
+window.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded - starting image load');
+    const img = document.getElementById('page-image');
+    
+    if (!img) {
+        console.error('Image element not found!');
+        showImageError();
+        return;
+    }
+    
+    // Add event listeners before setting src
+    img.addEventListener('load', function() {
+        console.log('Image loaded successfully');
+        // Direct DOM manipulation instead of function call
+        document.getElementById('loading-indicator').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        console.log('Content should be visible now');
+    });
+    
+    img.addEventListener('error', function(e) {
+        console.error('Image failed to load:', e);
+        try {
+            showImageError();
+        } catch (e) {
+            console.error('Error in showImageError:', e);
+        }
+    });
+    
+    // Set a timeout to force show content if image events don't fire
+    setTimeout(function() {
+        if (document.getElementById('loading-indicator').style.display !== 'none') {
+            console.warn('Timeout reached, forcing display');
+            hideLoading();
+        }
+    }, 5000);
+    
+    // Set image source - the browser will include cookies automatically
+    console.log('Setting image src to:', '/admin/page-image/{{ paper.doc_id }}/{{ page_number }}');
+    img.src = '/admin/page-image/{{ paper.doc_id }}/{{ page_number }}';
+});
+
+function zoomIn() {
+    if (currentZoom < maxZoom) {
+        currentZoom += zoomStep;
+        updateZoom();
+    }
+}
+
+function zoomOut() {
+    if (currentZoom > minZoom) {
+        currentZoom -= zoomStep;
+        updateZoom();
+    }
+}
+
+function resetZoom() {
+    currentZoom = 1;
+    updateZoom();
+}
+
+function updateZoom() {
+    const img = document.getElementById('page-image');
+    img.style.transform = `scale(${currentZoom})`;
+    
+    if (currentZoom > 1) {
+        img.classList.add('zoom-in');
+    } else {
+        img.classList.remove('zoom-in');
+    }
+}
+
+function copyText() {
+    {% if page_embedding and page_embedding.page_text %}
+    const text = `{{ page_embedding.page_text|replace('\n', '\\n')|replace('\r', '\\r')|replace('"', '\\"') }}`;
+    navigator.clipboard.writeText(text).then(() => {
+        showSuccess('Text copied to clipboard');
+    }).catch(err => {
+        showError('Failed to copy text: ' + err.message);
+    });
+    {% else %}
+    showError('No text available to copy');
+    {% endif %}
+}
+
+function downloadText() {
+    {% if page_embedding and page_embedding.page_text %}
+    const text = `{{ page_embedding.page_text|replace('\n', '\\n')|replace('\r', '\\r')|replace('"', '\\"') }}`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `{{ paper.filename }}_page_{{ page_number }}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showSuccess('Text file downloaded');
+    {% else %}
+    showError('No text available to download');
+    {% endif %}
+}
+
+function downloadPageImage() {
+    // Simply trigger download using a link - browser will handle authentication
+    const link = document.createElement('a');
+    link.href = '/admin/page-image/{{ paper.doc_id }}/{{ page_number }}';
+    link.download = 'page_{{ page_number }}_{{ paper.doc_id }}.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showSuccess('Page image download started');
+}
+
+// Allow click on image to zoom (after image loads)
+window.addEventListener('DOMContentLoaded', function() {
+    const img = document.getElementById('page-image');
+    img.addEventListener('click', function() {
+        if (currentZoom === 1) {
+            zoomIn();
+        } else {
+            resetZoom();
+        }
+    });
+});
+</script>
+{% endblock %}

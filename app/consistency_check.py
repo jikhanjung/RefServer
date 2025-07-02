@@ -176,9 +176,9 @@ class DatabaseConsistencyChecker:
         try:
             # Get page embedding counts per paper from SQLite
             sqlite_page_counts = {}
-            for page_emb in PageEmbedding.select(PageEmbedding.paper_id):
-                paper_id = page_emb.paper_id
-                sqlite_page_counts[paper_id] = sqlite_page_counts.get(paper_id, 0) + 1
+            for page_emb in PageEmbedding.select().join(Paper):
+                doc_id = page_emb.paper.doc_id  # Use Paper.doc_id to match ChromaDB
+                sqlite_page_counts[doc_id] = sqlite_page_counts.get(doc_id, 0) + 1
             
             # Get page embedding counts from ChromaDB pages collection
             chromadb_page_counts = {}
@@ -186,31 +186,33 @@ class DatabaseConsistencyChecker:
                 chromadb_pages = self.vector_db.pages_collection.get()
                 if chromadb_pages['metadatas']:
                     for metadata in chromadb_pages['metadatas']:
-                        paper_id = metadata.get('paper_id')
-                        if paper_id:
-                            chromadb_page_counts[paper_id] = chromadb_page_counts.get(paper_id, 0) + 1
+                        doc_id = metadata.get('doc_id')  # ChromaDB uses 'doc_id', not 'paper_id'
+                        if doc_id:
+                            chromadb_page_counts[doc_id] = chromadb_page_counts.get(doc_id, 0) + 1
             except Exception as e:
                 logger.warning(f"Could not get ChromaDB page counts: {e}")
             
             # Compare counts
-            all_paper_ids = set(sqlite_page_counts.keys()) | set(chromadb_page_counts.keys())
+            all_doc_ids = set(sqlite_page_counts.keys()) | set(chromadb_page_counts.keys())
             
-            for paper_id in all_paper_ids:
-                sqlite_count = sqlite_page_counts.get(paper_id, 0)
-                chromadb_count = chromadb_page_counts.get(paper_id, 0)
+            for doc_id in all_doc_ids:
+                sqlite_count = sqlite_page_counts.get(doc_id, 0)
+                chromadb_count = chromadb_page_counts.get(doc_id, 0)
                 
                 if sqlite_count != chromadb_count:
                     self.issues.append(ConsistencyIssue(
                         issue_type=ConsistencyIssueType.COUNT_MISMATCH,
-                        doc_id=paper_id,
-                        description=f"Page embedding count mismatch for paper {paper_id}: SQLite has {sqlite_count}, ChromaDB has {chromadb_count}",
+                        doc_id=doc_id,
+                        description=f"Page embedding count mismatch for paper {doc_id}: SQLite has {sqlite_count}, ChromaDB has {chromadb_count}",
                         severity="medium",
                         sqlite_data={"page_count": sqlite_count},
                         chromadb_data={"page_count": chromadb_count},
                         suggested_fix="Regenerate page embeddings for this paper"
                     ))
             
-            logger.info(f"Page embedding consistency checked for {len(all_paper_ids)} papers")
+            logger.info(f"Page embedding consistency checked for {len(all_doc_ids)} papers")
+            logger.info(f"SQLite page counts: {sqlite_page_counts}")
+            logger.info(f"ChromaDB page counts: {chromadb_page_counts}")
             
         except Exception as e:
             logger.error(f"Error checking page embedding consistency: {e}")
@@ -225,10 +227,12 @@ class DatabaseConsistencyChecker:
                                        .where(Paper.doc_id.is_null()))
             
             for embedding in embeddings_without_papers:
+                # embedding.paper is a ForeignKey - need to get doc_id from it
+                paper_doc_id = embedding.paper.doc_id if embedding.paper else "unknown"
                 self.issues.append(ConsistencyIssue(
                     issue_type=ConsistencyIssueType.ORPHANED_SQLITE,
-                    doc_id=embedding.paper_id,
-                    description=f"Embedding exists for non-existent paper {embedding.paper_id}",
+                    doc_id=paper_doc_id,
+                    description=f"Embedding exists for non-existent paper {paper_doc_id}",
                     severity="low",
                     suggested_fix="Remove orphaned embedding record"
                 ))
@@ -240,10 +244,12 @@ class DatabaseConsistencyChecker:
                                             .where(Paper.doc_id.is_null()))
             
             for page_emb in page_embeddings_without_papers:
+                # page_emb.paper is a ForeignKey - need to get doc_id from it
+                paper_doc_id = page_emb.paper.doc_id if page_emb.paper else "unknown"
                 self.issues.append(ConsistencyIssue(
                     issue_type=ConsistencyIssueType.ORPHANED_SQLITE,
-                    doc_id=page_emb.paper_id,
-                    description=f"Page embedding exists for non-existent paper {page_emb.paper_id}",
+                    doc_id=paper_doc_id,
+                    description=f"Page embedding exists for non-existent paper {paper_doc_id}",
                     severity="low",
                     suggested_fix="Remove orphaned page embedding record"
                 ))
@@ -386,8 +392,14 @@ class DatabaseConsistencyChecker:
     def _fix_orphaned_sqlite(self, issue: ConsistencyIssue):
         """Fix orphaned SQLite records"""
         # Remove orphaned embeddings
-        Embedding.delete().where(Embedding.paper_id == issue.doc_id).execute()
-        PageEmbedding.delete().where(PageEmbedding.paper_id == issue.doc_id).execute()
+        # Note: Embedding.paper and PageEmbedding.paper are ForeignKey fields
+        try:
+            paper = Paper.get(Paper.doc_id == issue.doc_id)
+            Embedding.delete().where(Embedding.paper == paper).execute()
+            PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+        except Paper.DoesNotExist:
+            # Paper doesn't exist, so find orphaned records by doc_id in metadata
+            logger.warning(f"Paper {issue.doc_id} doesn't exist, cannot fix orphaned records directly")
     
     def _fix_metadata_mismatch(self, issue: ConsistencyIssue):
         """Fix metadata mismatches by updating ChromaDB"""

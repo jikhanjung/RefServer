@@ -176,13 +176,28 @@
                     <a href="/admin/page-embeddings" class="btn btn-outline-secondary">
                         <i class="fas fa-layer-group me-2"></i>Page Embeddings
                     </a>
+                    <a href="/admin/layout-analysis" class="btn btn-outline-info">
+                        <i class="fas fa-th-large me-2"></i>Layout Analysis
+                    </a>
                     <a href="/admin/change-password" class="btn btn-outline-warning">
                         <i class="fas fa-key me-2"></i>Change Password
                     </a>
                     <a href="/docs" class="btn btn-outline-info" target="_blank">
                         <i class="fas fa-book me-2"></i>API Docs
                     </a>
+                    <a href="/admin/backup" class="btn btn-outline-success">
+                        <i class="fas fa-save me-2"></i>Backup & Restore
+                    </a>
+                    <a href="/admin/consistency" class="btn btn-outline-info">
+                        <i class="fas fa-balance-scale me-2"></i>Data Consistency
+                    </a>
                     {% if user.is_superuser %}
+                    <a href="/admin/security" class="btn btn-outline-warning">
+                        <i class="fas fa-shield-alt me-2"></i>Security Settings
+                    </a>
+                    <a href="/admin/database" class="btn btn-outline-danger">
+                        <i class="fas fa-database me-2"></i>Database Management
+                    </a>
                     <a href="/admin/users" class="btn btn-outline-warning">
                         <i class="fas fa-users-cog me-2"></i>Manage Users
                     </a>
@@ -192,4 +207,291 @@
         </div>
     </div>
 </div>
+
+<!-- Backup & System Status Row -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card border-success">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-save text-success me-2"></i>Backup System Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-muted">Last Backup</h6>
+                            <span class="badge bg-success">
+                                <i class="fas fa-clock me-1"></i>Recent
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-muted">Auto Schedule</h6>
+                        <span class="badge bg-info">
+                            <i class="fas fa-calendar me-1"></i>Active
+                        </span>
+                    </div>
+                </div>
+                <hr>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="/admin/backup" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-save me-1"></i>Manage Backups
+                    </a>
+                    <a href="/admin/consistency" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-check me-1"></i>Check Consistency
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tools text-warning me-2"></i>System Management
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-muted">Vector DB</h6>
+                            <span class="badge bg-success">
+                                <i class="fas fa-check me-1"></i>Healthy
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-muted">Services</h6>
+                        <span class="badge bg-success">
+                            <i class="fas fa-play me-1"></i>Running
+                        </span>
+                    </div>
+                </div>
+                <hr>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="/admin/vector-db" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-project-diagram me-1"></i>Vector DB
+                    </a>
+                    <a href="/admin/performance" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-chart-line me-1"></i>Performance
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Backup Actions Row -->
+{% if user.is_superuser %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-lightning-bolt me-2"></i>Quick Actions (Superuser)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="triggerBackup('full')">
+                                <i class="fas fa-download me-2"></i>
+                                <div>Full Backup</div>
+                                <small class="text-muted">Complete database backup</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-info" onclick="checkConsistency()">
+                                <i class="fas fa-search me-2"></i>
+                                <div>Check Consistency</div>
+                                <small class="text-muted">Verify data integrity</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <a href="/admin/database" class="btn btn-outline-danger">
+                                <i class="fas fa-database me-2"></i>
+                                <div>DB Management</div>
+                                <small class="text-muted">Advanced operations</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Status Modals -->
+<div class="modal fade" id="actionProgressModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionProgressTitle">Processing...</h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p id="actionProgressStatus">Please wait...</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         style="width: 100%" role="progressbar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="actionResultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" id="actionResultHeader">
+                <h5 class="modal-title" id="actionResultTitle">Operation Complete</h5>
+            </div>
+            <div class="modal-body" id="actionResultBody">
+                <p id="actionResultMessage">Operation completed successfully.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function triggerBackup(type = 'full') {
+    const progressModal = new bootstrap.Modal(document.getElementById('actionProgressModal'));
+    const resultModal = new bootstrap.Modal(document.getElementById('actionResultModal'));
+    
+    // Show progress
+    document.getElementById('actionProgressTitle').textContent = 'Creating Backup';
+    document.getElementById('actionProgressStatus').textContent = `Creating ${type} backup...`;
+    progressModal.show();
+    
+    try {
+        const response = await fetch('/admin/backup/trigger', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ backup_type: type })
+        });
+        
+        const result = await response.json();
+        progressModal.hide();
+        
+        if (response.ok && result.success) {
+            // Show success
+            document.getElementById('actionResultHeader').className = 'modal-header bg-success text-white';
+            document.getElementById('actionResultTitle').textContent = 'Backup Successful';
+            document.getElementById('actionResultMessage').innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    ${type.charAt(0).toUpperCase() + type.slice(1)} backup completed successfully!
+                </div>
+                <p><strong>Backup ID:</strong> ${result.backup_id || 'Unknown'}</p>
+                <p><strong>Files backed up:</strong> SQLite + ChromaDB</p>
+            `;
+        } else {
+            throw new Error(result.detail || 'Backup failed');
+        }
+        
+        resultModal.show();
+        
+    } catch (error) {
+        progressModal.hide();
+        
+        // Show error
+        document.getElementById('actionResultHeader').className = 'modal-header bg-danger text-white';
+        document.getElementById('actionResultTitle').textContent = 'Backup Failed';
+        document.getElementById('actionResultMessage').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Backup failed: ${error.message}
+            </div>
+        `;
+        
+        resultModal.show();
+    }
+}
+
+async function checkConsistency() {
+    const progressModal = new bootstrap.Modal(document.getElementById('actionProgressModal'));
+    const resultModal = new bootstrap.Modal(document.getElementById('actionResultModal'));
+    
+    // Show progress
+    document.getElementById('actionProgressTitle').textContent = 'Checking Consistency';
+    document.getElementById('actionProgressStatus').textContent = 'Checking database consistency...';
+    progressModal.show();
+    
+    try {
+        const response = await fetch('/admin/consistency/check');
+        const result = await response.json();
+        progressModal.hide();
+        
+        if (response.ok) {
+            // Show results
+            const issues = result.issues || [];
+            const isHealthy = issues.length === 0;
+            
+            document.getElementById('actionResultHeader').className = 
+                isHealthy ? 'modal-header bg-success text-white' : 'modal-header bg-warning text-white';
+            document.getElementById('actionResultTitle').textContent = 
+                isHealthy ? 'Database Healthy' : 'Issues Found';
+            
+            let message = `
+                <div class="alert alert-${isHealthy ? 'success' : 'warning'}">
+                    <i class="fas fa-${isHealthy ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    Database consistency check completed.
+                </div>
+            `;
+            
+            if (isHealthy) {
+                message += '<p>No consistency issues found. Database is healthy!</p>';
+            } else {
+                message += `<p><strong>${issues.length} issue(s) found:</strong></p><ul>`;
+                issues.slice(0, 5).forEach(issue => {
+                    message += `<li>${issue.description}</li>`;
+                });
+                if (issues.length > 5) {
+                    message += `<li>... and ${issues.length - 5} more</li>`;
+                }
+                message += '</ul>';
+                message += '<p><a href="/admin/consistency" class="btn btn-primary btn-sm">View Details</a></p>';
+            }
+            
+            document.getElementById('actionResultMessage').innerHTML = message;
+        } else {
+            throw new Error(result.detail || 'Consistency check failed');
+        }
+        
+        resultModal.show();
+        
+    } catch (error) {
+        progressModal.hide();
+        
+        // Show error
+        document.getElementById('actionResultHeader').className = 'modal-header bg-danger text-white';
+        document.getElementById('actionResultTitle').textContent = 'Check Failed';
+        document.getElementById('actionResultMessage').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Consistency check failed: ${error.message}
+            </div>
+        `;
+        
+        resultModal.show();
+    }
+}
+</script>
 {% endblock %}

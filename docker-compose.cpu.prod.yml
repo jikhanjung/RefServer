@@ -25,10 +25,24 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434  # Use external Ollama for Llama 3.2 metadata extraction
-      - HURIDOCS_LAYOUT_URL=disabled  # Disable Huridocs layout analysis (GPU accelerated)
+      #- HURIDOCS_LAYOUT_URL=disabled  # Disable Huridocs layout analysis (GPU accelerated)
       - LLAVA_ENABLED=false  # Disable LLaVA OCR quality assessment (GPU required)
       - CPU_ONLY_MODE=true
       - LOG_LEVEL=INFO
+      - ENABLE_QUARANTINE=false  # Disable file quarantine for development
+      - MAX_FILE_SIZE=200000000  # 200MB file size limit
+      - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060
+    depends_on:
+      - huridocs-layout
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  huridocs-layout:
+    image: honestjung/pdf-layout-custom:latest
+    container_name: huridocs-layout
+    ports:
+      - "8061:5060"  # Map external 8061 to internal 5060
+    environment:
+      - WORKERS=2
     restart: unless-stopped

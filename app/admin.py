@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import os
+import logging
 
 from models import Paper, Metadata, Embedding, LayoutAnalysis, AdminUser, PageEmbedding
 from auth import AuthManager
@@ -17,7 +18,10 @@ from vector_db import get_vector_db
 from duplicate_detector import get_duplicate_detector
 from service_circuit_breaker import get_circuit_breaker_manager
 from version import get_version
+from peewee import JOIN
+import json
 
+logger = logging.getLogger(__name__)
 
 # Initialize router and templates
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -438,32 +442,36 @@ async def page_embeddings_list(request: Request, search: Optional[str] = None):
         # Get statistics
         stats = get_stats()
         
-        # Get papers with page embeddings
+        # Get all papers first, then filter those with page embeddings
         if search:
             papers_query = (Paper
                           .select()
-                          .where(
-                              Paper.filename.contains(search) &
-                              Paper.id.in_(PageEmbedding.select(PageEmbedding.paper))
-                          )
+                          .where(Paper.filename.contains(search))
                           .order_by(Paper.created_at.desc()))
         else:
             papers_query = (Paper
                           .select()
-                          .where(Paper.id.in_(PageEmbedding.select(PageEmbedding.paper)))
                           .order_by(Paper.created_at.desc()))
         
         papers_list = []
+        total_papers_checked = 0
+        papers_with_embeddings = 0
+        
         for paper in papers_query:
+            total_papers_checked += 1
             # Get page embedding statistics for this paper
             page_embs = list(PageEmbedding.select().where(PageEmbedding.paper == paper))
-            if page_embs:
+            if page_embs:  # Only include papers that have page embeddings
+                papers_with_embeddings += 1
                 avg_vector_dim = page_embs[0].vector_dim  # All should be same
                 model_name = page_embs[0].model_name
                 paper.page_count = len(page_embs)
                 paper.avg_vector_dim = avg_vector_dim
                 paper.model_name = model_name
                 papers_list.append(paper)
+                logger.info(f"📄 Found paper with page embeddings: {paper.doc_id} ({paper.filename}) - {len(page_embs)} pages")
+        
+        logger.info(f"📊 Page embeddings query results: {total_papers_checked} total papers, {papers_with_embeddings} with embeddings, {len(papers_list)} in final list")
         
         return templates.TemplateResponse(
             "page_embeddings.html", 
@@ -550,15 +558,17 @@ async def vector_db_monitoring(request: Request):
         
         # Get SQLite paper counts for comparison
         total_papers = Paper.select().count()
-        papers_with_embeddings = (Paper
-                                .select(Paper.id)
-                                .join(Embedding, on=(Paper.id == Embedding.paper))
-                                .group_by(Paper.id)
+        
+        # Count papers with embeddings using distinct
+        papers_with_embeddings = (Embedding
+                                .select(Embedding.paper)
+                                .distinct()
                                 .count())
-        papers_with_page_embeddings = (Paper
-                                     .select(Paper.id)
-                                     .join(PageEmbedding, on=(Paper.id == PageEmbedding.paper))
-                                     .group_by(Paper.id)
+        
+        # Count papers with page embeddings using distinct
+        papers_with_page_embeddings = (PageEmbedding
+                                     .select(PageEmbedding.paper)
+                                     .distinct()
                                      .count())
         
         # Calculate coverage percentages
@@ -1485,6 +1495,703 @@ async def test_service_connection(
     except Exception as e:
         logger.error(f"Failed to test service {service_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to test service: {str(e)}")
+
+
+# Database management
+@router.get("/database", response_class=HTMLResponse)
+async def database_management(request: Request):
+    """Database management page"""
+    user = require_auth(request)
+    
+    # Only superusers can access database management
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser access required")
+    
+    stats = get_stats()
+    
+    return templates.TemplateResponse(
+        "database_management.html", 
+        {
+            "request": request, 
+            "user": user, 
+            "stats": stats,
+            "page_title": "Database Management",
+            "version": get_version()
+        }
+    )
+
+@router.post("/database/reset")
+async def reset_database(request: Request):
+    """Reset all database data (DANGER: This will delete all data!)"""
+    user = require_auth(request)
+    
+    # Only superusers can reset database
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser access required")
+    
+    try:
+        # Import necessary modules
+        import os
+        import shutil
+        from vector_db import get_vector_db
+        
+        logger.warning(f"🚨 Database reset initiated by user: {user.username}")
+        
+        # 1. Clear SQLite tables
+        logger.info("🗑️ Clearing SQLite tables...")
+        
+        # Delete in correct order to avoid foreign key constraints
+        from models import ProcessingJob, PageEmbedding, Embedding, LayoutAnalysis, Metadata, Paper
+        
+        ProcessingJob.delete().execute()
+        logger.info("  ✅ ProcessingJob table cleared")
+        
+        PageEmbedding.delete().execute()
+        logger.info("  ✅ PageEmbedding table cleared")
+        
+        Embedding.delete().execute()
+        logger.info("  ✅ Embedding table cleared")
+        
+        LayoutAnalysis.delete().execute()
+        logger.info("  ✅ LayoutAnalysis table cleared")
+        
+        Metadata.delete().execute()
+        logger.info("  ✅ Metadata table cleared")
+        
+        Paper.delete().execute()
+        logger.info("  ✅ Paper table cleared")
+        
+        # 2. Clear ChromaDB collections
+        logger.info("🗑️ Clearing ChromaDB collections...")
+        try:
+            vector_db = get_vector_db()
+            
+            # Delete all documents from collections
+            papers_collection = vector_db.papers_collection
+            pages_collection = vector_db.pages_collection
+            
+            # Get all IDs and delete them
+            try:
+                papers_result = papers_collection.get()
+                if papers_result['ids']:
+                    papers_collection.delete(ids=papers_result['ids'])
+                    logger.info(f"  ✅ ChromaDB papers collection cleared ({len(papers_result['ids'])} documents)")
+                else:
+                    logger.info("  ✅ ChromaDB papers collection was already empty")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Error clearing papers collection: {e}")
+            
+            try:
+                pages_result = pages_collection.get()
+                if pages_result['ids']:
+                    pages_collection.delete(ids=pages_result['ids'])
+                    logger.info(f"  ✅ ChromaDB pages collection cleared ({len(pages_result['ids'])} documents)")
+                else:
+                    logger.info("  ✅ ChromaDB pages collection was already empty")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Error clearing pages collection: {e}")
+                
+        except Exception as e:
+            logger.error(f"  ❌ Error clearing ChromaDB: {e}")
+        
+        # 3. Clear file storage
+        logger.info("🗑️ Clearing file storage...")
+        data_dirs = ['/refdata', './data']
+        
+        for data_dir in data_dirs:
+            if os.path.exists(data_dir):
+                # Clear PDFs directory
+                pdfs_dir = os.path.join(data_dir, 'pdfs')
+                if os.path.exists(pdfs_dir):
+                    for filename in os.listdir(pdfs_dir):
+                        if filename.endswith('.pdf'):
+                            os.remove(os.path.join(pdfs_dir, filename))
+                    logger.info(f"  ✅ PDF files cleared from {pdfs_dir}")
+                
+                # Clear images directory
+                images_dir = os.path.join(data_dir, 'images')
+                if os.path.exists(images_dir):
+                    for filename in os.listdir(images_dir):
+                        if filename.endswith(('.png', '.jpg', '.jpeg')):
+                            os.remove(os.path.join(images_dir, filename))
+                    logger.info(f"  ✅ Image files cleared from {images_dir}")
+                
+                # Clear temp directory
+                temp_dir = os.path.join(data_dir, 'temp')
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir)
+                    os.makedirs(temp_dir, exist_ok=True)
+                    logger.info(f"  ✅ Temp directory cleared: {temp_dir}")
+        
+        logger.info("✅ Database reset completed successfully")
+        
+        return {
+            "success": True,
+            "message": "Database reset completed successfully",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Database reset failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database reset failed: {str(e)}")
+
+@router.post("/papers/{doc_id}/regenerate-page-embeddings")
+async def regenerate_page_embeddings(doc_id: str, request: Request):
+    """Regenerate page embeddings for a specific paper and save to ChromaDB"""
+    user = require_auth(request)
+    
+    # Only superusers can regenerate embeddings
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser access required")
+    
+    try:
+        from models import Paper, PageEmbedding
+        from embedding import save_page_embeddings_to_vectordb
+        from text_extraction import extract_page_texts_from_pdf
+        from embedding import generate_page_embeddings
+        
+        logger.info(f"🔄 Regenerating page embeddings for paper: {doc_id}")
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Check if PDF file exists
+        pdf_path = paper.file_path
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
+        
+        logger.info(f"📄 Found paper: {paper.filename} at {pdf_path}")
+        
+        # Extract page texts from PDF
+        page_texts, page_count = extract_page_texts_from_pdf(pdf_path)
+        logger.info(f"📚 Extracted {page_count} pages of text")
+        
+        if not page_texts or page_count == 0:
+            raise HTTPException(status_code=400, detail="No text extracted from PDF")
+        
+        # Generate new embeddings
+        logger.info(f"🧮 Generating new page embeddings...")
+        page_embeddings = generate_page_embeddings(page_texts)
+        
+        if not page_embeddings or len(page_embeddings) != page_count:
+            raise HTTPException(status_code=500, detail=f"Embedding generation failed: expected {page_count}, got {len(page_embeddings) if page_embeddings else 0}")
+        
+        # Prepare data for ChromaDB
+        page_embeddings_data = []
+        for i, (page_text, page_embedding) in enumerate(zip(page_texts, page_embeddings)):
+            page_embeddings_data.append((i + 1, page_text, page_embedding))  # 1-based page numbering
+        
+        logger.info(f"📊 Prepared {len(page_embeddings_data)} page embeddings for save")
+        
+        # Save to ChromaDB
+        logger.info(f"💾 Saving page embeddings to ChromaDB...")
+        success = save_page_embeddings_to_vectordb(doc_id, page_embeddings_data)
+        
+        if success:
+            logger.info(f"✅ Page embeddings regenerated successfully for {doc_id}")
+            
+            # Update SQLite metadata (replace existing records)
+            try:
+                # Delete existing page embeddings
+                PageEmbedding.delete().where(PageEmbedding.paper == paper).execute()
+                
+                # Insert new metadata (without vector blobs since they're in ChromaDB)
+                batch_data = []
+                for page_number, page_text, embedding_vector in page_embeddings_data:
+                    batch_data.append({
+                        'paper': paper,
+                        'page_number': page_number,
+                        'page_text': page_text,
+                        'vector_blob': b'',  # Empty blob - actual vector is in ChromaDB
+                        'vector_dim': len(embedding_vector),
+                        'model_name': 'bge-m3'
+                    })
+                
+                PageEmbedding.insert_many(batch_data).execute()
+                logger.info(f"✅ Updated SQLite metadata for {len(batch_data)} page embeddings")
+                
+            except Exception as sqlite_error:
+                logger.warning(f"⚠️ Failed to update SQLite metadata: {sqlite_error}")
+                # ChromaDB save was successful, so this is not critical
+            
+            return {
+                "success": True,
+                "message": f"Page embeddings regenerated successfully for {doc_id}",
+                "pages_processed": len(page_embeddings_data),
+                "saved_to_chromadb": True
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save page embeddings to ChromaDB")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to regenerate page embeddings for {doc_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Embedding regeneration failed: {str(e)}")
+
+# Security Settings Management
+@router.get("/security", response_class=HTMLResponse)
+async def security_settings_page(request: Request):
+    """Security settings management page"""
+    user = require_auth(request)
+    
+    # Only superusers can access security settings
+    if not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Superuser access required")
+    
+    try:
+        from file_security import get_security_status
+        
+        security_status = get_security_status()
+        
+        return templates.TemplateResponse(
+            "security_settings.html",
+            {
+                "request": request,
+                "user": user,
+                "security_status": security_status,
+                "version": get_version()
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "security_settings.html",
+            {
+                "request": request,
+                "user": user,
+                "error": f"Error loading security settings: {str(e)}",
+                "version": get_version()
+            }
+        )
+
+
+@router.get("/security/status")
+async def get_security_status_api(user: AdminUser = Depends(require_auth)):
+    """Get current security system status"""
+    try:
+        from file_security import get_security_status
+        return get_security_status()
+        
+    except Exception as e:
+        logger.error(f"Failed to get security status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get security status: {str(e)}")
+
+
+@router.post("/security/quarantine/toggle")
+async def toggle_quarantine(
+    enable: bool = Form(...),
+    user: AdminUser = Depends(require_auth)
+):
+    """Toggle quarantine system on/off"""
+    try:
+        # Only superusers can change security settings
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only superusers can change security settings")
+        
+        from file_security import get_file_validator
+        
+        validator = get_file_validator()
+        validator.config.enable_quarantine = enable
+        
+        # Update environment variable (for current session)
+        import os
+        os.environ['ENABLE_QUARANTINE'] = 'true' if enable else 'false'
+        
+        logger.info(f"File quarantine {'enabled' if enable else 'disabled'} by {user.username}")
+        
+        return {
+            "success": True,
+            "message": f"File quarantine {'enabled' if enable else 'disabled'} successfully",
+            "quarantine_enabled": enable
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to toggle quarantine: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to toggle quarantine: {str(e)}")
+
+
+@router.post("/security/limits/update")
+async def update_security_limits(
+    max_file_size_mb: int = Form(...),
+    max_uploads_per_hour: int = Form(...),
+    max_uploads_per_day: int = Form(...),
+    user: AdminUser = Depends(require_auth)
+):
+    """Update file upload limits"""
+    try:
+        # Only superusers can change security settings
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only superusers can change security settings")
+        
+        from file_security import get_file_validator
+        
+        validator = get_file_validator()
+        
+        # Update configuration
+        validator.config.max_file_size = max_file_size_mb * 1024 * 1024  # Convert MB to bytes
+        validator.config.max_uploads_per_hour = max_uploads_per_hour
+        validator.config.max_uploads_per_day = max_uploads_per_day
+        
+        # Update environment variables (for current session)
+        import os
+        os.environ['MAX_FILE_SIZE'] = str(validator.config.max_file_size)
+        os.environ['MAX_UPLOADS_PER_HOUR'] = str(max_uploads_per_hour)
+        os.environ['MAX_UPLOADS_PER_DAY'] = str(max_uploads_per_day)
+        
+        logger.info(f"Security limits updated by {user.username}: {max_file_size_mb}MB, {max_uploads_per_hour}/hour, {max_uploads_per_day}/day")
+        
+        return {
+            "success": True,
+            "message": "Security limits updated successfully",
+            "limits": {
+                "max_file_size_mb": max_file_size_mb,
+                "max_uploads_per_hour": max_uploads_per_hour,
+                "max_uploads_per_day": max_uploads_per_day
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update security limits: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update security limits: {str(e)}")
+
+
+@router.get("/security/quarantine/files")
+async def get_quarantine_files(user: AdminUser = Depends(require_auth)):
+    """Get list of quarantined files"""
+    try:
+        from file_security import get_file_validator
+        
+        validator = get_file_validator()
+        quarantine_info = validator.get_quarantine_info()
+        
+        return quarantine_info
+        
+    except Exception as e:
+        logger.error(f"Failed to get quarantine files: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get quarantine files: {str(e)}")
+
+
+@router.delete("/security/quarantine/clear")
+async def clear_quarantine(user: AdminUser = Depends(require_auth)):
+    """Clear all quarantined files"""
+    try:
+        # Only superusers can clear quarantine
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only superusers can clear quarantine")
+        
+        from file_security import get_file_validator
+        import shutil
+        
+        validator = get_file_validator()
+        
+        if validator.config.enable_quarantine and validator.config.quarantine_dir.exists():
+            # Remove all files in quarantine directory
+            shutil.rmtree(validator.config.quarantine_dir)
+            validator.config.quarantine_dir.mkdir(parents=True, exist_ok=True)
+            
+            logger.info(f"Quarantine cleared by {user.username}")
+            
+            return {
+                "success": True,
+                "message": "Quarantine cleared successfully"
+            }
+        else:
+            return {
+                "success": True,
+                "message": "Quarantine directory was already empty or quarantine is disabled"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to clear quarantine: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear quarantine: {str(e)}")
+
+
+# Page Image Generation
+@router.get("/page-image/{doc_id}/{page_number}")
+async def get_page_image(
+    doc_id: str, 
+    page_number: int,
+    user: AdminUser = Depends(require_auth)
+):
+    """Generate and return a specific page as an image"""
+    try:
+        from models import Paper
+        import pdf2image
+        from fastapi.responses import StreamingResponse
+        import io
+        import os
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Check if PDF file exists
+        pdf_path = paper.file_path
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
+        
+        logger.info(f"Generating image for page {page_number} of {pdf_path}")
+        
+        # Convert specific page to image
+        try:
+            # Try with specific poppler path if needed
+            poppler_path = None
+            if os.path.exists('/usr/bin'):
+                poppler_path = '/usr/bin'
+            
+            logger.info(f"Converting PDF to image with poppler_path: {poppler_path}")
+            
+            pages = pdf2image.convert_from_path(
+                pdf_path,
+                first_page=page_number,
+                last_page=page_number,
+                dpi=150,  # Good quality for display
+                fmt='PNG',
+                poppler_path=poppler_path
+            )
+            
+            if not pages:
+                logger.error(f"No pages returned for page {page_number}")
+                raise HTTPException(status_code=404, detail=f"Page {page_number} not found in PDF")
+            
+            logger.info(f"Successfully converted page {page_number} to image")
+            
+            # Convert PIL image to bytes
+            img_buffer = io.BytesIO()
+            pages[0].save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            
+            # Get the image data
+            image_data = img_buffer.getvalue()
+            logger.info(f"Image size: {len(image_data)} bytes")
+            
+            return StreamingResponse(
+                io.BytesIO(image_data),
+                media_type="image/png",
+                headers={
+                    "Content-Disposition": f"inline; filename=page_{page_number}_{doc_id}.png",
+                    "Content-Length": str(len(image_data)),
+                    "Cache-Control": "no-cache"
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Error converting PDF page to image: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to generate page image: {str(e)}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get page image for {doc_id} page {page_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get page image: {str(e)}")
+
+
+@router.get("/page-viewer/{doc_id}/{page_number}", response_class=HTMLResponse)
+async def page_viewer(
+    request: Request,
+    doc_id: str, 
+    page_number: int
+):
+    """Page viewer showing image and text side by side"""
+    user = require_auth(request)
+    
+    try:
+        from models import Paper, PageEmbedding
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Get page embedding (for text)
+        try:
+            page_embedding = PageEmbedding.get(
+                (PageEmbedding.paper == paper) & 
+                (PageEmbedding.page_number == page_number)
+            )
+        except PageEmbedding.DoesNotExist:
+            page_embedding = None
+        
+        return templates.TemplateResponse(
+            "page_viewer.html",
+            {
+                "request": request,
+                "user": user,
+                "paper": paper,
+                "page_number": page_number,
+                "page_embedding": page_embedding,
+                "version": get_version()
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load page viewer for {doc_id} page {page_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load page viewer: {str(e)}")
+
+
+# Layout Analysis Management
+@router.get("/layout-analysis", response_class=HTMLResponse)
+async def layout_analysis_list(request: Request, search: Optional[str] = None):
+    """Layout analysis management page"""
+    user = require_auth(request)
+    
+    try:
+        # Get statistics
+        stats = get_stats()
+        
+        # Get papers with layout analysis
+        if search:
+            papers_query = (Paper
+                          .select()
+                          .join(LayoutAnalysis, JOIN.LEFT_OUTER)
+                          .where(Paper.filename.contains(search))
+                          .order_by(Paper.created_at.desc()))
+        else:
+            papers_query = (Paper
+                          .select()
+                          .join(LayoutAnalysis, JOIN.LEFT_OUTER)
+                          .order_by(Paper.created_at.desc()))
+        
+        papers_list = []
+        for paper in papers_query:
+            # Check if paper has layout analysis
+            try:
+                layout = paper.layout.get()
+                paper.has_layout = True
+                paper.layout_page_count = layout.page_count
+                paper.layout_created = layout.created_at
+                papers_list.append(paper)
+            except LayoutAnalysis.DoesNotExist:
+                paper.has_layout = False
+                papers_list.append(paper)
+        
+        return templates.TemplateResponse(
+            "layout_analysis.html",
+            {
+                "request": request,
+                "user": user,
+                "papers": papers_list,
+                "stats": stats
+            }
+        )
+        
+    except Exception as e:
+        return templates.TemplateResponse(
+            "layout_analysis.html",
+            {
+                "request": request,
+                "user": user,
+                "papers": [],
+                "stats": get_stats(),
+                "error": f"Error loading layout analysis: {str(e)}"
+            }
+        )
+
+
+@router.get("/layout-analysis/{doc_id}", response_class=HTMLResponse)
+async def layout_analysis_detail(request: Request, doc_id: str):
+    """Layout analysis detail page"""
+    user = require_auth(request)
+    
+    try:
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Get layout analysis
+        try:
+            layout = LayoutAnalysis.get(LayoutAnalysis.paper == paper)
+            layout_data = layout.get_layout_data()
+        except LayoutAnalysis.DoesNotExist:
+            layout = None
+            layout_data = None
+        
+        return templates.TemplateResponse(
+            "layout_analysis_detail.html",
+            {
+                "request": request,
+                "user": user,
+                "paper": paper,
+                "layout": layout,
+                "layout_data": layout_data,
+                "layout_json": json.dumps(layout_data, indent=2) if layout_data else None,
+                "version": get_version()
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load layout analysis for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load layout analysis: {str(e)}")
+
+
+@router.post("/layout-analysis/{doc_id}/regenerate")
+async def regenerate_layout_analysis(doc_id: str, user: AdminUser = Depends(require_auth)):
+    """Regenerate layout analysis for a specific paper"""
+    try:
+        # Only superusers can regenerate layout analysis
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Superuser access required")
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Check if PDF file exists
+        pdf_path = paper.file_path
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
+        
+        logger.info(f"Regenerating layout analysis for {doc_id}")
+        
+        # Import and run layout analysis
+        from layout import analyze_layout
+        
+        layout_result = analyze_layout(pdf_path)
+        
+        if layout_result:
+            # Delete existing layout analysis
+            LayoutAnalysis.delete().where(LayoutAnalysis.paper == paper).execute()
+            
+            # Save new layout analysis
+            from db import save_layout_analysis
+            save_layout_analysis(doc_id, layout_result)
+            
+            logger.info(f"Layout analysis regenerated successfully for {doc_id}")
+            
+            return {
+                "success": True,
+                "message": "Layout analysis regenerated successfully",
+                "page_count": layout_result.get('page_count', 0)
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Layout analysis failed")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to regenerate layout analysis for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Layout analysis regeneration failed: {str(e)}")
 
 
 # Root redirect

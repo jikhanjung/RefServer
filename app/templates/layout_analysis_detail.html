@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Layout Analysis - {{ paper.filename }}{% endblock %}
+{% block header %}Layout Analysis Detail{% endblock %}
+
+{% block actions %}
+<div class="btn-group" role="group">
+    <a href="/admin/layout-analysis" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Layout List
+    </a>
+    <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-info">
+        <i class="fas fa-file-alt me-2"></i>View Paper
+    </a>
+    {% if user.is_superuser %}
+    <button type="button" class="btn btn-outline-warning" onclick="regenerateLayout()">
+        <i class="fas fa-sync-alt me-2"></i>Regenerate
+    </button>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Error/Success Messages -->
+<div id="success-message" class="alert alert-success d-none" role="alert">
+    <i class="fas fa-check-circle me-2"></i><span id="success-text"></span>
+</div>
+
+<div id="error-message" class="alert alert-danger d-none" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i><span id="error-text"></span>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <!-- Paper Information -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="fas fa-file-pdf text-danger me-2"></i>Paper Info
+                </h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Filename:</strong> {{ paper.filename }}</p>
+                <p><strong>Document ID:</strong> <code>{{ paper.doc_id }}</code></p>
+                {% if layout %}
+                <p><strong>Total Pages:</strong> <span class="badge bg-primary">{{ layout.page_count }}</span></p>
+                <p><strong>Analyzed:</strong> {{ layout.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>No layout analysis available
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if layout_data %}
+        <!-- Layout Summary -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title">Layout Summary</h5>
+            </div>
+            <div class="card-body">
+                {% if layout_data.pages %}
+                <p><strong>Total Pages:</strong> {{ layout_data.pages|length }}</p>
+                {% endif %}
+                
+                {% if layout_data.metadata %}
+                <hr>
+                <h6>Document Metadata</h6>
+                <ul class="list-unstyled small">
+                    {% for key, value in layout_data.metadata.items() %}
+                    <li><strong>{{ key|title }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                
+                <!-- Element count summary -->
+                {% set total_sections = 0 %}
+                {% set total_paragraphs = 0 %}
+                {% set total_tables = 0 %}
+                {% set total_figures = 0 %}
+                
+                {% if layout_data.pages %}
+                {% for page in layout_data.pages %}
+                    {% if page.sections %}
+                        {% set total_sections = total_sections + page.sections|length %}
+                    {% endif %}
+                    {% if page.paragraphs %}
+                        {% set total_paragraphs = total_paragraphs + page.paragraphs|length %}
+                    {% endif %}
+                    {% if page.tables %}
+                        {% set total_tables = total_tables + page.tables|length %}
+                    {% endif %}
+                    {% if page.figures %}
+                        {% set total_figures = total_figures + page.figures|length %}
+                    {% endif %}
+                {% endfor %}
+                {% endif %}
+                
+                <hr>
+                <h6>Content Elements</h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h5 class="text-primary">{{ total_sections }}</h5>
+                        <small class="text-muted">Sections</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-success">{{ total_paragraphs }}</h5>
+                        <small class="text-muted">Paragraphs</small>
+                    </div>
+                </div>
+                <div class="row text-center mt-2">
+                    <div class="col-6">
+                        <h5 class="text-info">{{ total_tables }}</h5>
+                        <small class="text-muted">Tables</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-warning">{{ total_figures }}</h5>
+                        <small class="text-muted">Figures</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        {% if layout_data %}
+        <!-- Layout Details Tabs -->
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#page-structure">
+                            <i class="fas fa-th-large me-1"></i>Page Structure
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#raw-json">
+                            <i class="fas fa-code me-1"></i>Raw JSON
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#visual-layout">
+                            <i class="fas fa-eye me-1"></i>Visual Layout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <!-- Page Structure Tab -->
+                    <div class="tab-pane fade show active" id="page-structure">
+                        {% if layout_data.pages %}
+                        <div class="accordion" id="pagesAccordion">
+                            {% for page in layout_data.pages %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                    <button class="accordion-button {% if loop.index > 1 %}collapsed{% endif %}" type="button" 
+                                            data-bs-toggle="collapse" data-bs-target="#page{{ loop.index }}" 
+                                            aria-expanded="{% if loop.index == 1 %}true{% else %}false{% endif %}">
+                                        Page {{ page.page_number if page.page_number else loop.index }}
+                                        <span class="ms-auto me-3">
+                                            {% if page.sections %}<span class="badge bg-primary me-1">{{ page.sections|length }} sections</span>{% endif %}
+                                            {% if page.paragraphs %}<span class="badge bg-success me-1">{{ page.paragraphs|length }} paragraphs</span>{% endif %}
+                                            {% if page.tables %}<span class="badge bg-info me-1">{{ page.tables|length }} tables</span>{% endif %}
+                                            {% if page.figures %}<span class="badge bg-warning me-1">{{ page.figures|length }} figures</span>{% endif %}
+                                        </span>
+                                    </button>
+                                </h2>
+                                <div id="page{{ loop.index }}" class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}" 
+                                     data-bs-parent="#pagesAccordion">
+                                    <div class="accordion-body">
+                                        <!-- Sections -->
+                                        {% if page.sections %}
+                                        <h6><i class="fas fa-heading me-2"></i>Sections</h6>
+                                        <ul class="list-group mb-3">
+                                            {% for section in page.sections %}
+                                            <li class="list-group-item">
+                                                <strong>{{ section.title if section.title else 'Untitled Section' }}</strong>
+                                                {% if section.level %}
+                                                <span class="badge bg-secondary ms-2">Level {{ section.level }}</span>
+                                                {% endif %}
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                        
+                                        <!-- Paragraphs -->
+                                        {% if page.paragraphs %}
+                                        <h6><i class="fas fa-paragraph me-2"></i>Paragraphs ({{ page.paragraphs|length }})</h6>
+                                        <div class="mb-3">
+                                            {% for para in page.paragraphs[:3] %}
+                                            <p class="small border-start border-3 ps-2 mb-2">
+                                                {{ para.text[:200] if para.text else '' }}{% if para.text and para.text|length > 200 %}...{% endif %}
+                                            </p>
+                                            {% endfor %}
+                                            {% if page.paragraphs|length > 3 %}
+                                            <p class="text-muted small">... and {{ page.paragraphs|length - 3 }} more paragraphs</p>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Tables -->
+                                        {% if page.tables %}
+                                        <h6><i class="fas fa-table me-2"></i>Tables</h6>
+                                        <ul class="list-group mb-3">
+                                            {% for table in page.tables %}
+                                            <li class="list-group-item">
+                                                Table {{ loop.index }}
+                                                {% if table.rows %}
+                                                <span class="badge bg-info ms-2">{{ table.rows|length }} rows</span>
+                                                {% endif %}
+                                                {% if table.columns %}
+                                                <span class="badge bg-info ms-2">{{ table.columns }} columns</span>
+                                                {% endif %}
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                        
+                                        <!-- Figures -->
+                                        {% if page.figures %}
+                                        <h6><i class="fas fa-image me-2"></i>Figures</h6>
+                                        <ul class="list-group">
+                                            {% for figure in page.figures %}
+                                            <li class="list-group-item">
+                                                Figure {{ loop.index }}
+                                                {% if figure.caption %}
+                                                <br><small class="text-muted">{{ figure.caption }}</small>
+                                                {% endif %}
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No page structure data available</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Raw JSON Tab -->
+                    <div class="tab-pane fade" id="raw-json">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6>Raw Layout JSON</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyJSON()">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                        <pre class="border rounded p-3" style="max-height: 600px; overflow-y: auto;"><code>{{ layout_json }}</code></pre>
+                    </div>
+                    
+                    <!-- Visual Layout Tab -->
+                    <div class="tab-pane fade" id="visual-layout">
+                        <div class="text-center py-4">
+                            <i class="fas fa-drafting-compass fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Visual Layout Preview</h5>
+                            <p class="text-muted">Visual representation of document layout will be implemented in a future update.</p>
+                            <p class="text-muted small">This will show bounding boxes and structure overlaid on the PDF pages.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- No Layout Data -->
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-th-large fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Layout Analysis Available</h5>
+                <p class="text-muted">This paper has not been analyzed for layout structure yet.</p>
+                {% if user.is_superuser %}
+                <button class="btn btn-primary" onclick="regenerateLayout()">
+                    <i class="fas fa-sync-alt me-2"></i>Generate Layout Analysis
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function regenerateLayout() {
+    if (!confirm('Are you sure you want to regenerate the layout analysis? This may take a few moments.')) {
+        return;
+    }
+    
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+    
+    fetch('/admin/layout-analysis/{{ paper.doc_id }}/regenerate', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + getAuthToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess(data.message);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showError(data.message || 'Failed to regenerate layout analysis');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Regenerate';
+        }
+    })
+    .catch(error => {
+        showError('Error regenerating layout analysis: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Regenerate';
+    });
+}
+
+function copyJSON() {
+    const jsonText = document.querySelector('#raw-json pre code').textContent;
+    navigator.clipboard.writeText(jsonText).then(() => {
+        showSuccess('JSON copied to clipboard');
+    }).catch(err => {
+        showError('Failed to copy JSON: ' + err.message);
+    });
+}
+
+function showSuccess(message) {
+    document.getElementById('success-text').textContent = message;
+    document.getElementById('success-message').classList.remove('d-none');
+    document.getElementById('error-message').classList.add('d-none');
+    setTimeout(() => {
+        document.getElementById('success-message').classList.add('d-none');
+    }, 3000);
+}
+
+function showError(message) {
+    document.getElementById('error-text').textContent = message;
+    document.getElementById('error-message').classList.remove('d-none');
+    document.getElementById('success-message').classList.add('d-none');
+    setTimeout(() => {
+        document.getElementById('error-message').classList.add('d-none');
+    }, 5000);
+}
+
+function getAuthToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'access_token') {
+            return value;
+        }
+    }
+    return '';
+}
+</script>
+{% endblock %}

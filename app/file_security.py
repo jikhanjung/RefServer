@@ -205,13 +205,29 @@ class FileValidator:
             
             # Final threat assessment
             if validation_result['threat_level'] in ['high', 'critical']:
+                # Log detailed threat information
+                threat_details = []
+                if 'threats_detected' in validation_result:
+                    threat_details.extend([f"Malicious pattern: {threat}" for threat in validation_result['threats_detected']])
+                if 'pdf_analysis' in validation_result and validation_result['pdf_analysis'].get('suspicious_features'):
+                    threat_details.extend([f"PDF security issue: {feature}" for feature in validation_result['pdf_analysis']['suspicious_features']])
+                if 'structure_issues' in validation_result:
+                    threat_details.extend([f"Structure issue: {issue}" for issue in validation_result['structure_issues']])
+                
+                logger.warning(f"Security threats detected in '{filename}': {'; '.join(threat_details)}")
+                
                 if self.config.enable_quarantine:
                     self._quarantine_file(file_path, filename, validation_result)
                     validation_result['quarantined'] = True
-                
-                raise MaliciousFileError(
-                    f"File '{filename}' contains malicious content and has been quarantined"
-                )
+                    
+                    logger.error(f"File '{filename}' quarantined due to security threats: {'; '.join(threat_details)}")
+                    raise MaliciousFileError(
+                        f"File '{filename}' contains malicious content and has been quarantined"
+                    )
+                else:
+                    # Quarantine disabled - log warning but allow processing
+                    logger.warning(f"File '{filename}' contains suspicious content but quarantine is disabled. Threat details: {'; '.join(threat_details)}. Proceeding with processing.")
+                    validation_result['quarantine_bypassed'] = True
             
             # Success
             validation_result['status'] = 'passed'
@@ -361,24 +377,45 @@ class FileValidator:
             with open(file_path, 'rb') as f:
                 content = f.read()
             
+            logger.debug(f"Scanning file {file_path} for malicious content (size: {len(content)} bytes)")
+            
             # Check for suspicious patterns
+            detected_patterns = []
             for pattern in self.config.suspicious_patterns:
                 if pattern in content:
-                    threats.append(f"Suspicious pattern: {pattern.decode('utf-8', errors='ignore')}")
+                    pattern_str = pattern.decode('utf-8', errors='ignore')
+                    threats.append(f"Suspicious pattern: {pattern_str}")
+                    detected_patterns.append(pattern_str)
+            
+            if detected_patterns:
+                logger.warning(f"Detected suspicious patterns in {file_path}: {', '.join(detected_patterns)}")
             
             # Check for PDF-specific threats
+            detected_pdf_threats = []
             for pattern in self.config.pdf_suspicious_keywords:
                 if pattern in content:
-                    threats.append(f"PDF threat: {pattern.decode('utf-8', errors='ignore')}")
+                    pattern_str = pattern.decode('utf-8', errors='ignore')
+                    threats.append(f"PDF threat: {pattern_str}")
+                    detected_pdf_threats.append(pattern_str)
+            
+            if detected_pdf_threats:
+                logger.warning(f"Detected PDF security threats in {file_path}: {', '.join(detected_pdf_threats)}")
             
             # Check for embedded executables
             if self._contains_embedded_executable(content):
                 threats.append("Embedded executable detected")
+                logger.warning(f"Embedded executable signature detected in {file_path}")
             
             # Check for suspicious URLs
             suspicious_urls = self._extract_suspicious_urls(content)
             if suspicious_urls:
                 threats.extend([f"Suspicious URL: {url}" for url in suspicious_urls])
+                logger.warning(f"Suspicious URLs detected in {file_path}: {', '.join(suspicious_urls)}")
+            
+            if threats:
+                logger.warning(f"Total {len(threats)} security threats detected in {file_path}")
+            else:
+                logger.debug(f"No malicious content detected in {file_path}")
             
         except Exception as e:
             logger.error(f"Error scanning for malicious content: {e}")

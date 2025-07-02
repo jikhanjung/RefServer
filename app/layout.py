@@ -80,7 +80,7 @@ class HuridocsLayoutAnalyzer:
             logger.error(f"Failed to connect to Huridocs service: {e}")
             return False
     
-    def analyze_pdf_layout(self, pdf_path: str, timeout: int = 300) -> Dict:
+    def analyze_pdf_layout(self, pdf_path: str, timeout: int = 600) -> Dict:
         """
         Analyze PDF layout using Huridocs service
         
@@ -101,7 +101,16 @@ class HuridocsLayoutAnalyzer:
                 logger.error(f"PDF file not found: {pdf_path}")
                 return self._create_error_result(f"File not found: {pdf_path}")
             
-            logger.info(f"Starting layout analysis for: {pdf_path}")
+            # Check file size (skip files larger than 50MB to prevent OOM)
+            file_size = os.path.getsize(pdf_path)
+            file_size_mb = file_size / (1024 * 1024)
+            max_size_mb = 50  # 50MB limit
+            
+            if file_size_mb > max_size_mb:
+                logger.warning(f"PDF file too large for layout analysis: {file_size_mb:.1f}MB (max: {max_size_mb}MB)")
+                return self._create_error_result(f"File too large: {file_size_mb:.1f}MB (max: {max_size_mb}MB)")
+            
+            logger.info(f"Starting layout analysis for: {pdf_path} ({file_size_mb:.1f}MB)")
             
             # Prepare file for upload and make request with retry
             logger.info("Sending PDF to Huridocs layout service...")

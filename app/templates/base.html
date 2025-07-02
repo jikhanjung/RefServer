@@ -64,6 +64,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if 'layout-analysis' in request.url.path %}active{% endif %}" href="/admin/layout-analysis">
+                                <i class="fas fa-th-large me-2"></i>Layout Analysis
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if 'change-password' in request.url.path %}active{% endif %}" href="/admin/change-password">
                                 <i class="fas fa-key me-2"></i>Change Password
                             </a>
@@ -132,6 +137,11 @@
                         {% if user.is_superuser %}
                         <li class="nav-item">
                             <hr class="dropdown-divider my-2">
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'database' in request.url.path %}active{% endif %}" href="/admin/database">
+                                <i class="fas fa-database me-2"></i>Database Management
+                            </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'users' in request.url.path %}active{% endif %}" href="/admin/users">

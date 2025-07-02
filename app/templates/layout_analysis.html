@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Layout Analysis - RefServer Admin{% endblock %}
+{% block header %}Layout Analysis Management{% endblock %}
+
+{% block actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
+        <i class="fas fa-sync-alt me-2"></i>Refresh
+    </button>
+    <button type="button" class="btn btn-outline-info" onclick="showStatsModal()">
+        <i class="fas fa-chart-bar me-2"></i>Statistics
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Layout Analysis Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary">{{ stats.papers_with_layout }}</h4>
+                        <small class="text-muted">Papers with Layout</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success">{{ stats.total_papers }}</h4>
+                        <small class="text-muted">Total Papers</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    <label class="form-label">Coverage Rate</label>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ stats.processing_rates.layout_rate }}%">
+                            {{ "%.1f"|format(stats.processing_rates.layout_rate) }}%
+                        </div>
+                    </div>
+                </div>
+                <small class="text-muted">
+                    Layout analysis extracts document structure including sections, paragraphs, tables, and figures.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="card-title mb-0">Papers</h5>
+                    </div>
+                    <div class="col-auto">
+                        <form method="get" class="d-flex">
+                            <input type="text" class="form-control me-2" name="search" placeholder="Search papers..." 
+                                   value="{{ request.query_params.get('search', '') }}">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if papers %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Filename</th>
+                                <th>Layout Status</th>
+                                <th>Page Count</th>
+                                <th>Analyzed At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for paper in papers %}
+                            <tr>
+                                <td>
+                                    <i class="fas fa-file-pdf text-danger me-2"></i>
+                                    {{ paper.filename }}
+                                </td>
+                                <td>
+                                    {% if paper.has_layout %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>Analyzed
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paper.has_layout %}
+                                    <span class="badge bg-primary">{{ paper.layout_page_count }}</span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paper.has_layout %}
+                                    {{ paper.layout_created.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        {% if paper.has_layout %}
+                                        <a href="/admin/layout-analysis/{{ paper.doc_id }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        {% else %}
+                                        <button class="btn btn-outline-secondary" disabled>
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        {% endif %}
+                                        <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-outline-info">
+                                            <i class="fas fa-file-alt"></i> Paper
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-th-large fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No papers found</h5>
+                    <p class="text-muted">Upload and process some PDFs to see layout analysis results</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Modal -->
+<div class="modal fade" id="statsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Layout Analysis Statistics</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Analysis Coverage</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Total Papers:</strong> {{ stats.total_papers }}</li>
+                            <li><strong>Papers with Layout Analysis:</strong> {{ stats.papers_with_layout }}</li>
+                            <li><strong>Coverage Rate:</strong> {{ "%.1f"|format(stats.processing_rates.layout_rate) }}%</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>What is Layout Analysis?</h6>
+                        <p class="text-muted">
+                            Layout analysis uses the Huridocs service to extract the structure of PDF documents including:
+                        </p>
+                        <ul class="text-muted">
+                            <li>Document sections and headings</li>
+                            <li>Paragraphs and text blocks</li>
+                            <li>Tables and their content</li>
+                            <li>Figures and captions</li>
+                            <li>Page structure and formatting</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showStatsModal() {
+    new bootstrap.Modal(document.getElementById('statsModal')).show();
+}
+</script>
+{% endblock %}

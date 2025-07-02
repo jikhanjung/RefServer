@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Database Management - RefServer Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-database"></i> Database Management</h2>
+                <span class="badge bg-warning">⚠️ Superuser Only</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Papers</h5>
+                    <h3 class="text-info">{{ stats.total_papers }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="card-title">With Embeddings</h5>
+                    <h3 class="text-success">{{ stats.papers_with_embeddings }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Processing Jobs</h5>
+                    <h3 class="text-warning">{{ stats.processing_jobs or 0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-secondary">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Files</h5>
+                    <h3 class="text-secondary">{{ stats.total_files or 0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Warning Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger" role="alert">
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Danger Zone</h4>
+                <p>The database reset operation will <strong>permanently delete all data</strong> including:</p>
+                <ul>
+                    <li>All uploaded PDF files and processed documents</li>
+                    <li>All embeddings and vector data (SQLite + ChromaDB)</li>
+                    <li>All metadata, layout analysis, and processing results</li>
+                    <li>All processing job history</li>
+                    <li>All generated preview images and temporary files</li>
+                </ul>
+                <hr>
+                <p class="mb-0"><strong>This action cannot be undone!</strong> Make sure you have a backup if needed.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Reset Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-trash-alt"></i> Reset Database</h4>
+                </div>
+                <div class="card-body">
+                    <p>This will completely reset the RefServer database and remove all stored data.</p>
+                    
+                    <!-- Reset Confirmation Form -->
+                    <form id="resetForm" style="display: none;">
+                        <div class="mb-3">
+                            <label for="confirmText" class="form-label">
+                                Type <code>RESET DATABASE</code> to confirm:
+                            </label>
+                            <input type="text" class="form-control" id="confirmText" placeholder="RESET DATABASE" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirmCheckbox" required>
+                            <label class="form-check-label" for="confirmCheckbox">
+                                I understand this will permanently delete all data
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-danger" id="resetBtn" disabled>
+                            <i class="fas fa-trash-alt"></i> Reset Database
+                        </button>
+                        <button type="button" class="btn btn-secondary ms-2" onclick="hideResetForm()">
+                            Cancel
+                        </button>
+                    </form>
+
+                    <!-- Show Reset Form Button -->
+                    <button type="button" class="btn btn-outline-danger" id="showResetBtn" onclick="showResetForm()">
+                        <i class="fas fa-exclamation-triangle"></i> I want to reset the database
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Progress Modal -->
+    <div class="modal fade" id="resetProgressModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Database Reset in Progress</h5>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-danger mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p id="resetStatus">Initializing database reset...</p>
+                    <div class="progress">
+                        <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" 
+                             style="width: 100%" role="progressbar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Success Modal -->
+    <div class="modal fade" id="resetSuccessModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-check-circle"></i> Database Reset Complete
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <p>The database has been successfully reset. All data has been cleared.</p>
+                    <p><strong>What was cleared:</strong></p>
+                    <ul>
+                        <li>SQLite tables (Papers, Embeddings, Metadata, etc.)</li>
+                        <li>ChromaDB vector collections</li>
+                        <li>PDF files and preview images</li>
+                        <li>Temporary processing files</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="window.location.reload()">
+                        Refresh Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showResetForm() {
+    document.getElementById('showResetBtn').style.display = 'none';
+    document.getElementById('resetForm').style.display = 'block';
+}
+
+function hideResetForm() {
+    document.getElementById('showResetBtn').style.display = 'block';
+    document.getElementById('resetForm').style.display = 'none';
+    document.getElementById('confirmText').value = '';
+    document.getElementById('confirmCheckbox').checked = false;
+    document.getElementById('resetBtn').disabled = true;
+}
+
+// Enable reset button only when confirmation is complete
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmText = document.getElementById('confirmText');
+    const confirmCheckbox = document.getElementById('confirmCheckbox');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function checkConfirmation() {
+        const textMatch = confirmText.value === 'RESET DATABASE';
+        const checkboxChecked = confirmCheckbox.checked;
+        resetBtn.disabled = !(textMatch && checkboxChecked);
+    }
+
+    confirmText.addEventListener('input', checkConfirmation);
+    confirmCheckbox.addEventListener('change', checkConfirmation);
+
+    // Handle form submission
+    document.getElementById('resetForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Show progress modal
+        const progressModal = new bootstrap.Modal(document.getElementById('resetProgressModal'));
+        progressModal.show();
+        
+        try {
+            const response = await fetch('/admin/database/reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const result = await response.json();
+            
+            // Hide progress modal
+            progressModal.hide();
+            
+            if (response.ok && result.success) {
+                // Show success modal
+                const successModal = new bootstrap.Modal(document.getElementById('resetSuccessModal'));
+                successModal.show();
+            } else {
+                throw new Error(result.detail || 'Database reset failed');
+            }
+            
+        } catch (error) {
+            // Hide progress modal
+            progressModal.hide();
+            
+            alert('Database reset failed: ' + error.message);
+            console.error('Reset error:', error);
+        }
+    });
+});
+</script>
+{% endblock %}

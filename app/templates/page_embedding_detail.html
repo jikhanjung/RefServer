@@ -121,9 +121,13 @@
                                 <td>{{ page_emb.created_at.strftime('%m-%d %H:%M') }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-info" 
-                                                onclick="showPageText({{ page_emb.page_number }}, '{{ page_emb.page_text|replace("'", "\\'") if page_emb.page_text else '' }}')">
+                                        <a href="/admin/page-viewer/{{ paper.doc_id }}/{{ page_emb.page_number }}" 
+                                           class="btn btn-outline-info" title="View page image and text">
                                             <i class="fas fa-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-primary" 
+                                                onclick="showPageText({{ page_emb.page_number }}, '{{ page_emb.page_text|replace("'", "\\'") if page_emb.page_text else '' }}')">
+                                            <i class="fas fa-font"></i>
                                         </button>
                                         <button type="button" class="btn btn-outline-secondary" 
                                                 onclick="downloadVector({{ page_emb.page_number }})">
