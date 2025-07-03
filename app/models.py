@@ -28,6 +28,11 @@ class Paper(BaseModel):
     created_at = DateTimeField(default=datetime.datetime.now)
     updated_at = DateTimeField(default=datetime.datetime.now)
     
+    # GPU-intensive task completion status
+    ocr_quality_completed = BooleanField(default=False)  # OCR quality check completed
+    layout_completed = BooleanField(default=False)  # Layout analysis completed
+    metadata_llm_completed = BooleanField(default=False)  # LLM metadata extraction completed
+    
     class Meta:
         indexes = (
             (('content_id',), False),
@@ -49,6 +54,11 @@ class ProcessingJob(BaseModel):
     created_at = DateTimeField(default=datetime.datetime.now)
     started_at = DateTimeField(null=True)  # When processing started
     completed_at = DateTimeField(null=True)  # When processing finished
+    
+    # GPU-intensive task tracking fields
+    ocr_quality_pending = BooleanField(default=False)  # OCR quality check pending
+    layout_pending = BooleanField(default=False)  # Layout analysis pending
+    metadata_llm_pending = BooleanField(default=False)  # LLM metadata extraction pending
     
     def get_steps_completed(self):
         """Get completed steps as list"""

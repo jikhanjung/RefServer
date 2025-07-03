@@ -1,6 +1,6 @@
 # 📅 Changelog
 
-- **2025-07-02 (v0.1.13 - 진행 중)**
+- **2025-07-03 (v0.1.13 - 완료)**
     - **🎨 관리자 대시보드 확장 및 새로운 관리 페이지 개발**
         - **5개 새로운 관리 페이지 추가**:
             - **`database_management.html`**: 데이터베이스 관리 전용 (Superuser 전용)
@@ -20,6 +20,57 @@
         - **Huridocs Layout 분석 이슈 진단**:
             - **문제 원인 파악**: Docker 환경에서 GPU 감지 실패로 인한 훈련 모드 실행
             - **해결 방안 제시**: `CUDA_VISIBLE_DEVICES=-1` 환경변수로 GPU 완전 비활성화
+
+    - **🎯 GPU 메모리 부족 문제 해결 - 선택적 처리 시스템 (v0.1.13)**
+        - **📊 데이터베이스 모델 확장**:
+            - **Paper 모델**: `ocr_quality_completed`, `layout_completed`, `metadata_llm_completed` 필드 추가
+            - **ProcessingJob 모델**: `ocr_quality_pending`, `layout_pending`, `metadata_llm_pending` 필드 추가
+            - **GPU 작업 완료 상태 추적**: 각 논문별 GPU 집약적 작업 처리 상태 관리
+            
+        - **⚙️ 파이프라인 선택적 처리 시스템**:
+            - **`skip_gpu_intensive` 파라미터**: GPU 집약적 작업 조건부 스킵 옵션
+            - **환경 변수 제어**: `ENABLE_GPU_INTENSIVE_TASKS`로 전역 GPU 작업 제어
+            - **3단계 GPU 작업 분류**:
+                - **OCR 품질 평가** (LLaVA) - Ollama 의존
+                - **레이아웃 분석** (Huridocs) - Ollama 독립
+                - **LLM 메타데이터 추출** (Llama 3.2) - Ollama 의존
+            - **Fallback 시스템**: GPU 작업 스킵 시 기본 처리 방법 유지
+            
+        - **🔧 스마트 배치 처리 시스템**:
+            - **`batch_process_pending.py` 대폭 개선**: Ollama 의존성 기반 작업 분류
+            - **새로운 처리 옵션**:
+                - `--sequential`: 스마트 순차 처리 (Ollama 작업 → 종료 → 레이아웃 → 재시작)
+                - `--ollama-tasks`: Ollama 의존 작업만 처리
+                - `--non-ollama-tasks`: Ollama 독립 작업만 처리
+                - `--check-ollama`: Ollama 상태 확인
+            - **자동 GPU 메모리 관리**: Ollama 서비스 자동 시작/종료로 메모리 최적화
+            - **프로세스 자동화**: subprocess를 통한 Ollama 제어 및 상태 모니터링
+            
+        - **🎛️ 관리자 인터페이스 - 미처리 항목 관리**:
+            - **`/admin/pending-tasks` 페이지**: GPU 작업 종합 관리 대시보드
+            - **실시간 미처리 항목 현황**: 작업 유형별 카운트 및 진행률 표시
+            - **Ollama 의존성 기반 UI**: 작업 그룹별 분리된 처리 버튼
+            - **웹 기반 배치 처리**: 관리자 인터페이스에서 직접 일괄 처리 실행
+            - **개별 논문 처리**: 논문별 세부 GPU 작업 상태 및 즉시 처리 기능
+            
+        - **📊 실시간 GPU 메모리 모니터링 시스템**:
+            - **`gpu_monitor.py` 모듈**: nvidia-smi 기반 GPU 상태 실시간 감지
+            - **Ollama 메모리 사용량 추적**: 실제/추정 GPU 메모리 사용량 표시
+            - **GPU 프로세스 모니터링**: 활성 GPU 프로세스 목록 및 메모리 사용량
+            - **모델별 메모리 추정**: LLaMA, LLaVA 등 모델별 메모리 사용량 예측
+            - **실시간 대시보드 업데이트**: 15초 주기 자동 새로고침 (페이지 리로드 없음)
+            - **시각적 메모리 진행률**: 사용량에 따른 색상 변화 (녹색/노란색/빨간색)
+            - **API 엔드포인트**: `/admin/gpu-status` - 실시간 GPU 상태 JSON 제공
+            
+        - **🔄 Docker 환경 설정 업데이트**:
+            - **docker-compose.yml**: `ENABLE_GPU_INTENSIVE_TASKS=true` 환경 변수 추가
+            - **docker-compose.cpu.yml**: `ENABLE_GPU_INTENSIVE_TASKS=false` CPU 모드 설정
+            - **배포 환경별 최적화**: GPU/CPU 환경에 따른 자동 작업 모드 전환
+            
+        - **🛠️ 데이터베이스 마이그레이션**:
+            - **`migrate_gpu_task_fields.py`**: 기존 데이터베이스 GPU 작업 필드 추가
+            - **자동 완료 상태 업데이트**: 기존 논문의 GPU 작업 완료 상태 자동 감지
+            - **Peewee 마이그레이션**: 안전한 스키마 변경 및 데이터 무결성 보장
 
 - **2025-06-23**
     - **📄 테스트 PDF 내용 관리 시스템 개선**

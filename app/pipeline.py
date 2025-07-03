@@ -53,7 +53,8 @@ class PDFProcessingPipeline:
         
         logger.info(f"Initialized PDF processing pipeline with data directory: {self.data_dir}")
     
-    def process_pdf(self, pdf_file_path: str, filename: str = None, progress_callback=None) -> Dict:
+    def process_pdf(self, pdf_file_path: str, filename: str = None, progress_callback=None, 
+                   skip_gpu_intensive: bool = None) -> Dict:
         """
         Complete PDF processing pipeline
         
@@ -61,6 +62,8 @@ class PDFProcessingPipeline:
             pdf_file_path: str, path to uploaded PDF file
             filename: str, original filename (optional)
             progress_callback: callable, function to call with progress updates (step_name, percentage)
+            skip_gpu_intensive: bool, skip GPU-intensive tasks (OCR quality, layout analysis, LLM metadata)
+                               If None, will check ENABLE_GPU_INTENSIVE_TASKS env var
             
         Returns:
             Dict: processing results summary
@@ -68,6 +71,14 @@ class PDFProcessingPipeline:
         # Generate unique document ID
         doc_id = str(uuid.uuid4())
         start_time = time.time()
+        
+        # Check if GPU-intensive tasks should be skipped
+        if skip_gpu_intensive is None:
+            # Check environment variable (default to True - enable GPU tasks)
+            skip_gpu_intensive = os.environ.get('ENABLE_GPU_INTENSIVE_TASKS', 'true').lower() == 'false'
+        
+        if skip_gpu_intensive:
+            logger.info("GPU-intensive tasks will be skipped (OCR quality, layout analysis, LLM metadata)")
         
         if not filename:
             filename = os.path.basename(pdf_file_path)
@@ -205,22 +216,35 @@ class PDFProcessingPipeline:
             ocr_quality = "unknown"
             quality_details = {}
             
-            try:
-                if is_quality_assessment_available() and result['data'].get('first_page_image'):
-                    quality_summary, quality_details = assess_document_quality(
-                        result['data']['first_page_image']
-                    )
-                    ocr_quality = quality_summary
-                    result['data']['quality'] = quality_details
-                    result['steps_completed'].append('quality_assessment')
-                    logger.info(f"Quality assessment completed: {quality_summary}")
-                else:
-                    result['warnings'].append("Quality assessment service unavailable")
-                    
-            except Exception as e:
-                logger.error(f"Quality assessment failed: {e}")
-                result['steps_failed'].append('quality_assessment')
-                result['warnings'].append(f"Quality assessment failed: {str(e)}")
+            if skip_gpu_intensive:
+                logger.info("Skipping OCR quality assessment (GPU-intensive task)")
+                result['warnings'].append("OCR quality assessment skipped (GPU-intensive)")
+                result['data']['ocr_quality_pending'] = True
+                # Mark in database that this task is pending
+                if paper:
+                    paper.ocr_quality_completed = False
+                    paper.save()
+            else:
+                try:
+                    if is_quality_assessment_available() and result['data'].get('first_page_image'):
+                        quality_summary, quality_details = assess_document_quality(
+                            result['data']['first_page_image']
+                        )
+                        ocr_quality = quality_summary
+                        result['data']['quality'] = quality_details
+                        result['steps_completed'].append('quality_assessment')
+                        logger.info(f"Quality assessment completed: {quality_summary}")
+                        # Mark as completed
+                        if paper:
+                            paper.ocr_quality_completed = True
+                            paper.save()
+                    else:
+                        result['warnings'].append("Quality assessment service unavailable")
+                        
+                except Exception as e:
+                    logger.error(f"Quality assessment failed: {e}")
+                    result['steps_failed'].append('quality_assessment')
+                    result['warnings'].append(f"Quality assessment failed: {str(e)}")
             
             # Update paper with OCR data
             try:
@@ -342,43 +366,62 @@ class PDFProcessingPipeline:
             logger.info("Step 5: Layout Analysis")
             if progress_callback:
                 progress_callback("Layout analysis", 65)
-            try:
-                if is_layout_service_available():
-                    layout_data, layout_success = analyze_pdf_layout(str(pdf_final_path))
-                    
-                    if layout_success:
-                        # Save layout analysis
-                        page_count = layout_data.get('page_count', 0)
-                        save_layout_analysis(doc_id, layout_data, page_count)
+            
+            if skip_gpu_intensive:
+                logger.info("Skipping layout analysis (GPU-intensive task)")
+                result['warnings'].append("Layout analysis skipped (GPU-intensive)")
+                result['data']['layout_pending'] = True
+                # Mark in database that this task is pending
+                if paper:
+                    paper.layout_completed = False
+                    paper.save()
+            else:
+                try:
+                    if is_layout_service_available():
+                        layout_data, layout_success = analyze_pdf_layout(str(pdf_final_path))
                         
-                        result['data']['layout'] = {
-                            'page_count': page_count,
-                            'total_elements': layout_data.get('total_elements', 0),
-                            'element_types': layout_data.get('element_types', {})
-                        }
-                        result['steps_completed'].append('layout')
-                        logger.info(f"Layout analysis completed: {page_count} pages analyzed")
+                        if layout_success:
+                            # Save layout analysis
+                            page_count = layout_data.get('page_count', 0)
+                            save_layout_analysis(doc_id, layout_data, page_count)
+                            
+                            result['data']['layout'] = {
+                                'page_count': page_count,
+                                'total_elements': layout_data.get('total_elements', 0),
+                                'element_types': layout_data.get('element_types', {})
+                            }
+                            result['steps_completed'].append('layout')
+                            logger.info(f"Layout analysis completed: {page_count} pages analyzed")
+                            # Mark as completed
+                            if paper:
+                                paper.layout_completed = True
+                                paper.save()
+                        else:
+                            raise Exception(f"Layout analysis failed: {layout_data.get('error', 'Unknown error')}")
                     else:
-                        raise Exception(f"Layout analysis failed: {layout_data.get('error', 'Unknown error')}")
-                else:
-                    result['warnings'].append("Layout analysis service unavailable")
-                    
-            except Exception as e:
-                logger.error(f"Layout analysis failed: {e}")
-                result['steps_failed'].append('layout')
-                result['warnings'].append(f"Layout analysis failed: {str(e)}")
+                        result['warnings'].append("Layout analysis service unavailable")
+                        
+                except Exception as e:
+                    logger.error(f"Layout analysis failed: {e}")
+                    result['steps_failed'].append('layout')
+                    result['warnings'].append(f"Layout analysis failed: {str(e)}")
             
             # Step 6: Metadata Extraction
             logger.info("Step 6: Metadata Extraction")
             if progress_callback:
                 progress_callback("Metadata extraction", 80)
+            
+            # Check if we should skip LLM-based metadata extraction
+            should_skip_llm_metadata = skip_gpu_intensive
+            
             try:
                 if extracted_text and len(extracted_text.strip()) > 100:
-                    if is_metadata_service_available():
+                    if should_skip_llm_metadata:
+                        logger.info("Skipping LLM-based metadata extraction (GPU-intensive task)")
+                        # Try rule-based extraction as fallback
                         metadata, metadata_success = extract_paper_metadata(extracted_text)
-                        
-                        if metadata_success:
-                            # Save metadata
+                        if metadata_success and metadata.get('extraction_method') == 'rule_based':
+                            # Save basic metadata from rule-based extraction
                             save_metadata(
                                 doc_id,
                                 title=metadata.get('title'),
@@ -389,20 +432,56 @@ class PDFProcessingPipeline:
                                 abstract=metadata.get('abstract'),
                                 keywords=metadata.get('keywords')
                             )
-                            
                             result['data']['metadata'] = {
                                 'title': metadata.get('title'),
                                 'authors_count': len(metadata.get('authors', [])),
                                 'year': metadata.get('year'),
                                 'journal': metadata.get('journal'),
-                                'extraction_method': metadata.get('extraction_method')
+                                'extraction_method': 'rule_based'
                             }
                             result['steps_completed'].append('metadata')
-                            logger.info(f"Metadata extracted: {metadata.get('title', 'Unknown title')}")
-                        else:
-                            raise Exception(f"Metadata extraction failed: {metadata.get('error', 'Unknown error')}")
+                            logger.info("Basic metadata extracted using rule-based method")
+                        
+                        result['warnings'].append("LLM metadata extraction skipped (GPU-intensive)")
+                        result['data']['metadata_llm_pending'] = True
+                        # Mark in database that LLM extraction is pending
+                        if paper:
+                            paper.metadata_llm_completed = False
+                            paper.save()
                     else:
-                        result['warnings'].append("Metadata extraction service unavailable")
+                        if is_metadata_service_available():
+                            metadata, metadata_success = extract_paper_metadata(extracted_text)
+                            
+                            if metadata_success:
+                                # Save metadata
+                                save_metadata(
+                                    doc_id,
+                                    title=metadata.get('title'),
+                                    authors=metadata.get('authors'),
+                                    journal=metadata.get('journal'),
+                                    year=metadata.get('year'),
+                                    doi=metadata.get('doi'),
+                                    abstract=metadata.get('abstract'),
+                                    keywords=metadata.get('keywords')
+                                )
+                                
+                                result['data']['metadata'] = {
+                                    'title': metadata.get('title'),
+                                    'authors_count': len(metadata.get('authors', [])),
+                                    'year': metadata.get('year'),
+                                    'journal': metadata.get('journal'),
+                                    'extraction_method': metadata.get('extraction_method')
+                                }
+                                result['steps_completed'].append('metadata')
+                                logger.info(f"Metadata extracted: {metadata.get('title', 'Unknown title')}")
+                                # Mark as completed if LLM was used
+                                if paper and metadata.get('extraction_method') in ['structured_llm', 'simple_llm']:
+                                    paper.metadata_llm_completed = True
+                                    paper.save()
+                            else:
+                                raise Exception(f"Metadata extraction failed: {metadata.get('error', 'Unknown error')}")
+                        else:
+                            result['warnings'].append("Metadata extraction service unavailable")
                 else:
                     result['warnings'].append("Text too short for metadata extraction")
                     

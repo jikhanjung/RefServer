@@ -1,0 +1,493 @@
+{% extends "base.html" %}
+
+{% block title %}Pending GPU Tasks - Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Pending GPU-Intensive Tasks</h1>
+    
+    <!-- GPU Tasks Status Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-microchip"></i> GPU Tasks Management</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Current GPU Mode</h6>
+                    <p>
+                        {% if gpu_mode_enabled %}
+                        <span class="badge bg-success">GPU Tasks Enabled</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">GPU Tasks Disabled</span>
+                        {% endif %}
+                    </p>
+                    <small class="text-muted">
+                        {% if gpu_mode_enabled %}
+                        GPU-intensive tasks are being processed normally.
+                        {% else %}
+                        GPU-intensive tasks are being skipped to conserve memory.
+                        {% endif %}
+                    </small>
+                </div>
+                <div class="col-md-6">
+                    <h6>Service Status</h6>
+                    <ul class="list-unstyled">
+                        <li>
+                            <i class="fas fa-{{ 'check-circle text-success' if services.llava else 'times-circle text-danger' }}"></i>
+                            LLaVA (OCR Quality): {{ 'Available' if services.llava else 'Unavailable' }}
+                        </li>
+                        <li>
+                            <i class="fas fa-{{ 'check-circle text-success' if services.layout else 'times-circle text-danger' }}"></i>
+                            Huridocs (Layout): {{ 'Available' if services.layout else 'Unavailable' }}
+                        </li>
+                        <li>
+                            <i class="fas fa-{{ 'check-circle text-success' if services.llm else 'times-circle text-danger' }}"></i>
+                            Ollama (LLM): {{ 'Available' if services.llm else 'Unavailable' }}
+                            {% if gpu_status.ollama.running %}
+                            <br><small class="text-muted ms-4">
+                                {% if gpu_status.ollama.actual_memory_mb %}
+                                GPU Memory: {{ "%.1f"|format(gpu_status.ollama.actual_memory_mb / 1024) }}GB
+                                {% elif gpu_status.ollama.estimated_memory_mb %}
+                                Est. GPU Memory: {{ "%.1f"|format(gpu_status.ollama.estimated_memory_mb / 1024) }}GB
+                                {% endif %}
+                                {% if gpu_status.ollama.running_models > 0 %}
+                                ({{ gpu_status.ollama.running_models }} model{{ 's' if gpu_status.ollama.running_models != 1 else '' }} loaded)
+                                {% endif %}
+                            </small>
+                            {% endif %}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- GPU Memory Status -->
+    {% if gpu_status.gpu.available %}
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-memory"></i> GPU Memory Status</h5>
+        </div>
+        <div class="card-body">
+            {% for gpu in gpu_status.gpu.gpus %}
+            <div class="mb-3">
+                <h6>{{ gpu.name }} (GPU {{ gpu.index }})</h6>
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="progress" style="height: 25px;">
+                            {% set usage_percent = (gpu.used_memory / gpu.total_memory * 100) if gpu.total_memory > 0 else 0 %}
+                            <div id="gpu-{{ loop.index0 }}-progress" class="progress-bar 
+                                {% if usage_percent < 50 %}bg-success
+                                {% elif usage_percent < 80 %}bg-warning  
+                                {% else %}bg-danger{% endif %}" 
+                                role="progressbar" style="width: {{ usage_percent }}%">
+                                {{ "%.1f"|format(usage_percent) }}%
+                            </div>
+                        </div>
+                        <small id="gpu-{{ loop.index0 }}-usage" class="text-muted">
+                            {{ "%.1f"|format(gpu.used_memory / 1024) }}GB / {{ "%.1f"|format(gpu.total_memory / 1024) }}GB used
+                        </small>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-end">
+                            <span class="badge bg-primary">{{ gpu.utilization }}% Utilization</span>
+                            <br><small id="gpu-{{ loop.index0 }}-free" class="text-success">{{ "%.1f"|format(gpu.free_memory / 1024) }}GB Free</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if gpu_status.gpu_processes %}
+            <h6 class="mt-3">Active GPU Processes</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>PID</th>
+                            <th>Memory</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for proc in gpu_status.gpu_processes %}
+                        <tr class="{{ 'table-warning' if 'ollama' in proc.name.lower() else '' }}">
+                            <td>{{ proc.name }}</td>
+                            <td>{{ proc.pid }}</td>
+                            <td>{{ "%.1f"|format(proc.memory_usage / 1024) }}GB</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Pending Tasks Summary -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">OCR Quality Pending</h5>
+                    <h2 class="text-warning">{{ pending_counts.ocr_quality }}</h2>
+                    <p class="card-text">Papers awaiting OCR quality assessment</p>
+                    {% if pending_counts.ocr_quality > 0 and services.llava %}
+                    <button class="btn btn-sm btn-primary" onclick="processPendingTasks('ocr_quality')">
+                        <i class="fas fa-play"></i> Process Now
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Layout Analysis Pending</h5>
+                    <h2 class="text-warning">{{ pending_counts.layout }}</h2>
+                    <p class="card-text">Papers awaiting layout analysis</p>
+                    {% if pending_counts.layout > 0 and services.layout %}
+                    <button class="btn btn-sm btn-primary" onclick="processPendingTasks('layout')">
+                        <i class="fas fa-play"></i> Process Now
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">LLM Metadata Pending</h5>
+                    <h2 class="text-warning">{{ pending_counts.metadata_llm }}</h2>
+                    <p class="card-text">Papers awaiting LLM metadata extraction</p>
+                    {% if pending_counts.metadata_llm > 0 and services.llm %}
+                    <button class="btn btn-sm btn-primary" onclick="processPendingTasks('metadata_llm')">
+                        <i class="fas fa-play"></i> Process Now
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Papers with Pending Tasks -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Papers with Pending Tasks</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Uploaded</th>
+                            <th>OCR Quality</th>
+                            <th>Layout</th>
+                            <th>LLM Metadata</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for paper in papers_with_pending %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('admin_paper_detail', paper_id=paper.doc_id) }}">
+                                    {{ paper.filename | truncate(50) }}
+                                </a>
+                            </td>
+                            <td>{{ paper.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if paper.ocr_quality_completed %}
+                                <span class="badge bg-success">Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if paper.layout_completed %}
+                                <span class="badge bg-success">Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if paper.metadata_llm_completed %}
+                                <span class="badge bg-success">Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-primary" onclick="processSinglePaper('{{ paper.doc_id }}')">
+                                        <i class="fas fa-sync"></i> Process
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if papers_with_pending | length == 0 %}
+            <p class="text-center text-muted">No papers with pending GPU tasks.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Batch Processing Options -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Batch Processing Options</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>🔥 Ollama-Dependent Tasks</h6>
+                    <p class="small text-muted">Requires Ollama to be running (OCR Quality + LLM Metadata)</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-warning" onclick="processPendingTasks('ollama-tasks')">
+                            <i class="fas fa-brain"></i> Process Ollama Tasks
+                        </button>
+                    </div>
+                    <small class="text-muted">Uses ~6-8GB GPU memory</small>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6>🏗️ Non-Ollama Tasks</h6>
+                    <p class="small text-muted">Can run when Ollama is stopped (Layout Analysis)</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-info" onclick="processPendingTasks('non-ollama-tasks')">
+                            <i class="fas fa-th-large"></i> Process Layout Tasks
+                        </button>
+                    </div>
+                    <small class="text-muted">Uses ~4-6GB GPU memory</small>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>🔄 Sequential Processing (Recommended)</h6>
+                    <p class="small text-muted">Automatically manages GPU memory by processing tasks sequentially</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="processPendingTasks('sequential')">
+                            <i class="fas fa-magic"></i> Smart Sequential Processing
+                        </button>
+                    </div>
+                    <small class="text-muted">
+                        1. Process Ollama tasks<br>
+                        2. Stop Ollama<br>
+                        3. Process layout analysis<br>
+                        4. Restart Ollama
+                    </small>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6>📋 Command Line Options</h6>
+                    <pre class="bg-light p-2 small"><code># Ollama-dependent tasks
+docker exec -it refserver python scripts/batch_process_pending.py --ollama-tasks
+
+# Non-Ollama tasks  
+docker exec -it refserver python scripts/batch_process_pending.py --non-ollama-tasks
+
+# Sequential (recommended)
+docker exec -it refserver python scripts/batch_process_pending.py --sequential
+
+# Check Ollama status
+docker exec -it refserver python scripts/batch_process_pending.py --check-ollama</code></pre>
+                </div>
+            </div>
+            
+            <div class="alert alert-warning mt-3" role="alert">
+                <strong>⚠️ GPU Memory Management:</strong>
+                <ul class="mb-0">
+                    <li><strong>Ollama + Layout together:</strong> ~10-14GB (may cause OOM)</li>
+                    <li><strong>Sequential processing:</strong> ~6-8GB max (recommended)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Modal -->
+<div class="modal fade" id="processingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Processing Pending Tasks</h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="mt-3" id="processingMessage">Starting batch processing...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function processPendingTasks(taskType) {
+    const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+    modal.show();
+    
+    document.getElementById('processingMessage').textContent = `Processing ${taskType} tasks...`;
+    
+    fetch(`/admin/pending-tasks/process`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task_type: taskType })
+    })
+    .then(response => response.json())
+    .then(data => {
+        modal.hide();
+        if (data.success) {
+            alert(`Successfully processed ${data.processed} tasks. ${data.failed} failed.`);
+            location.reload();
+        } else {
+            alert(`Error: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        modal.hide();
+        alert(`Error: ${error}`);
+    });
+}
+
+function processSinglePaper(docId) {
+    if (confirm('Process all pending tasks for this paper?')) {
+        const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+        modal.show();
+        
+        fetch(`/admin/pending-tasks/process-single`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ doc_id: docId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            modal.hide();
+            if (data.success) {
+                alert('Paper processed successfully');
+                location.reload();
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            modal.hide();
+            alert(`Error: ${error}`);
+        });
+    }
+}
+
+// Update GPU status without full page reload
+async function updateGPUStatus() {
+    try {
+        const response = await fetch('/admin/gpu-status');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update Ollama memory usage display
+            const ollamaStatus = data.gpu_status.ollama;
+            const ollamaElements = document.querySelectorAll('.ollama-memory-info');
+            
+            ollamaElements.forEach(element => {
+                if (ollamaStatus.running) {
+                    const memoryMB = ollamaStatus.actual_memory_mb || ollamaStatus.estimated_memory_mb;
+                    const memoryGB = (memoryMB / 1024).toFixed(1);
+                    const prefix = ollamaStatus.actual_memory_mb ? 'GPU Memory' : 'Est. GPU Memory';
+                    const models = ollamaStatus.running_models > 0 ? 
+                        ` (${ollamaStatus.running_models} model${ollamaStatus.running_models !== 1 ? 's' : ''} loaded)` : '';
+                    element.innerHTML = `<br><small class="text-muted ms-4">${prefix}: ${memoryGB}GB${models}</small>`;
+                } else {
+                    element.innerHTML = '';
+                }
+            });
+            
+            // Update GPU memory progress bars
+            const gpus = data.gpu_status.gpu.gpus || [];
+            gpus.forEach((gpu, index) => {
+                const progressBar = document.querySelector(`#gpu-${index}-progress`);
+                const usageText = document.querySelector(`#gpu-${index}-usage`);
+                const freeText = document.querySelector(`#gpu-${index}-free`);
+                
+                if (progressBar && usageText && freeText) {
+                    const usagePercent = gpu.total_memory > 0 ? (gpu.used_memory / gpu.total_memory * 100) : 0;
+                    progressBar.style.width = `${usagePercent}%`;
+                    progressBar.textContent = `${usagePercent.toFixed(1)}%`;
+                    
+                    // Update color based on usage
+                    progressBar.className = progressBar.className.replace(/bg-(success|warning|danger)/, '');
+                    if (usagePercent < 50) {
+                        progressBar.classList.add('bg-success');
+                    } else if (usagePercent < 80) {
+                        progressBar.classList.add('bg-warning');
+                    } else {
+                        progressBar.classList.add('bg-danger');
+                    }
+                    
+                    usageText.textContent = `${(gpu.used_memory / 1024).toFixed(1)}GB / ${(gpu.total_memory / 1024).toFixed(1)}GB used`;
+                    freeText.textContent = `${(gpu.free_memory / 1024).toFixed(1)}GB Free`;
+                }
+            });
+            
+            // Update last refresh time
+            const timestamp = new Date().toLocaleTimeString();
+            const refreshElement = document.getElementById('last-refresh');
+            if (refreshElement) {
+                refreshElement.textContent = `Last updated: ${timestamp}`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update GPU status:', error);
+    }
+}
+
+// Auto-refresh GPU status every 15 seconds
+setInterval(updateGPUStatus, 15000);
+
+// Add manual refresh functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add refresh indicator
+    const gpuCard = document.querySelector('.card-header.bg-info');
+    if (gpuCard) {
+        const refreshSpan = document.createElement('small');
+        refreshSpan.id = 'last-refresh';
+        refreshSpan.className = 'float-end';
+        refreshSpan.style.opacity = '0.8';
+        gpuCard.appendChild(refreshSpan);
+    }
+    
+    // Add click handlers for manual refresh
+    const progressBars = document.querySelectorAll('.progress-bar');
+    progressBars.forEach(bar => {
+        bar.setAttribute('title', 'Click to refresh GPU status');
+        bar.style.cursor = 'pointer';
+        bar.addEventListener('click', updateGPUStatus);
+    });
+    
+    // Add Ollama memory info containers
+    const ollamaItems = document.querySelectorAll('li:has(.fas.fa-check-circle, .fas.fa-times-circle)');
+    ollamaItems.forEach(item => {
+        if (item.textContent.includes('Ollama')) {
+            const memoryDiv = document.createElement('div');
+            memoryDiv.className = 'ollama-memory-info';
+            item.appendChild(memoryDiv);
+        }
+    });
+});
+</script>
+{% endblock %}

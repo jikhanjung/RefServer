@@ -189,6 +189,14 @@ class BackgroundProcessor:
                         error_msg = next((w for w in result.get('warnings', []) if step in w.lower()), f"{step} failed")
                         job.add_failed_step(step, error_msg)
                 
+                # Update GPU-intensive task pending status
+                if result.get('data', {}).get('ocr_quality_pending'):
+                    job.ocr_quality_pending = True
+                if result.get('data', {}).get('layout_pending'):
+                    job.layout_pending = True
+                if result.get('data', {}).get('metadata_llm_pending'):
+                    job.metadata_llm_pending = True
+                
                 # Link to created paper if available
                 if result.get('doc_id'):
                     try:
@@ -260,11 +268,15 @@ class BackgroundProcessor:
                     breaker_status = f"Huridocs CB: {self.huridocs_circuit_breaker.state}"
                     logger.debug(f"Step {step}: {breaker_status}")
             
+            # Check if GPU-intensive tasks should be skipped
+            skip_gpu_intensive = os.environ.get('ENABLE_GPU_INTENSIVE_TASKS', 'true').lower() == 'false'
+            
             # Use existing processor but with enhanced callbacks and service monitoring
             result = self.processor.process_pdf(
                 file_path,
                 filename=filename,
-                progress_callback=enhanced_progress_callback
+                progress_callback=enhanced_progress_callback,
+                skip_gpu_intensive=skip_gpu_intensive
             )
             
             # Monitor service health and update circuit breakers based on result
@@ -326,6 +338,14 @@ class BackgroundProcessor:
                         # Extract error message from warnings if available
                         error_msg = next((w for w in result.get('warnings', []) if step in w.lower()), f"{step} failed")
                         job.add_failed_step(step, error_msg)
+                
+                # Update GPU-intensive task pending status
+                if result.get('data', {}).get('ocr_quality_pending'):
+                    job.ocr_quality_pending = True
+                if result.get('data', {}).get('layout_pending'):
+                    job.layout_pending = True
+                if result.get('data', {}).get('metadata_llm_pending'):
+                    job.metadata_llm_pending = True
                 
                 # Link to created paper if available
                 if result.get('doc_id'):
@@ -421,11 +441,15 @@ class BackgroundProcessor:
                     breaker_status = f"Huridocs CB: {self.huridocs_circuit_breaker.state}"
                     logger.debug(f"Step {step}: {breaker_status}")
             
+            # Check if GPU-intensive tasks should be skipped
+            skip_gpu_intensive = os.environ.get('ENABLE_GPU_INTENSIVE_TASKS', 'true').lower() == 'false'
+            
             # Use existing processor but with enhanced callbacks and service monitoring
             result = self.processor.process_pdf(
                 file_path,
                 filename=filename,
-                progress_callback=enhanced_progress_callback
+                progress_callback=enhanced_progress_callback,
+                skip_gpu_intensive=skip_gpu_intensive
             )
             
             # Monitor service health and update circuit breakers based on result

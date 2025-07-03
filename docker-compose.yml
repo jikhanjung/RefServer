@@ -10,6 +10,7 @@ services:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434
       - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060
+      - ENABLE_GPU_INTENSIVE_TASKS=true  # Set to false to skip GPU tasks
     depends_on:
       - huridocs-layout
     extra_hosts:

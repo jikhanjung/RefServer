@@ -29,6 +29,7 @@ services:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434  # Use external Ollama for Llama 3.2 metadata extraction
       - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Enable Huridocs layout analysis for testing
+      - ENABLE_GPU_INTENSIVE_TASKS=false  # Skip GPU tasks in CPU mode
       - LLAVA_ENABLED=false  # Disable LLaVA OCR quality assessment (GPU required)
       - CPU_ONLY_MODE=true
       - LOG_LEVEL=INFO

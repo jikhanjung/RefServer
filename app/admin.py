@@ -2194,6 +2194,251 @@ async def regenerate_layout_analysis(doc_id: str, user: AdminUser = Depends(requ
         raise HTTPException(status_code=500, detail=f"Layout analysis regeneration failed: {str(e)}")
 
 
+# Pending GPU Tasks Management
+@router.get("/pending-tasks", response_class=HTMLResponse)
+async def admin_pending_tasks(
+    request: Request,
+    user: AdminUser = Depends(require_auth)
+):
+    """Display pending GPU-intensive tasks"""
+    try:
+        # Check GPU mode status
+        gpu_mode_enabled = os.environ.get('ENABLE_GPU_INTENSIVE_TASKS', 'true').lower() != 'false'
+        
+        # Check service availability
+        from ocr_quality import is_quality_assessment_available
+        from layout import is_layout_service_available
+        from metadata import is_metadata_service_available
+        from gpu_monitor import get_gpu_monitor
+        
+        services = {
+            'llava': is_quality_assessment_available(),
+            'layout': is_layout_service_available(),
+            'llm': is_metadata_service_available()
+        }
+        
+        # Get GPU and Ollama status
+        gpu_monitor = get_gpu_monitor()
+        gpu_status = gpu_monitor.get_comprehensive_status()
+        
+        # Count pending tasks
+        pending_counts = {
+            'ocr_quality': Paper.select().where(
+                (Paper.ocr_quality_completed == False) | 
+                (Paper.ocr_quality.is_null(True))
+            ).count(),
+            'layout': Paper.select().where(Paper.layout_completed == False).count(),
+            'metadata_llm': Paper.select().where(
+                (Paper.metadata_llm_completed == False) &
+                (Paper.ocr_text.is_null(False)) &
+                (Paper.ocr_text != '')
+            ).count()
+        }
+        
+        # Get papers with any pending tasks
+        papers_with_pending = Paper.select().where(
+            (Paper.ocr_quality_completed == False) |
+            (Paper.layout_completed == False) |
+            (Paper.metadata_llm_completed == False)
+        ).order_by(Paper.created_at.desc()).limit(50)
+        
+        return templates.TemplateResponse("pending_tasks.html", {
+            "request": request,
+            "user": user,
+            "gpu_mode_enabled": gpu_mode_enabled,
+            "services": services,
+            "pending_counts": pending_counts,
+            "papers_with_pending": papers_with_pending,
+            "gpu_status": gpu_status,
+            "version": get_version()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error displaying pending tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pending-tasks/process")
+async def process_pending_tasks(
+    request: Request,
+    user: AdminUser = Depends(require_auth)
+):
+    """Process pending GPU tasks"""
+    try:
+        data = await request.json()
+        task_type = data.get('task_type', 'all')
+        
+        # Import batch processing functions
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts'))
+        from batch_process_pending import (
+            process_pending_ocr_quality,
+            process_pending_layout,
+            process_pending_metadata_llm,
+            process_ollama_tasks,
+            process_non_ollama_tasks,
+            process_sequential
+        )
+        
+        total_processed = 0
+        total_failed = 0
+        
+        if task_type == 'sequential':
+            # Smart sequential processing (recommended)
+            total_processed, total_failed = process_sequential()
+        elif task_type == 'ollama-tasks':
+            # Process Ollama-dependent tasks
+            total_processed, total_failed = process_ollama_tasks()
+        elif task_type == 'non-ollama-tasks':
+            # Process non-Ollama tasks
+            total_processed, total_failed = process_non_ollama_tasks()
+        elif task_type == 'ocr_quality':
+            processed, failed = process_pending_ocr_quality()
+            total_processed += processed
+            total_failed += failed
+        elif task_type == 'layout':
+            processed, failed = process_pending_layout()
+            total_processed += processed
+            total_failed += failed
+        elif task_type == 'metadata_llm':
+            processed, failed = process_pending_metadata_llm()
+            total_processed += processed
+            total_failed += failed
+        elif task_type == 'all':
+            # Legacy all processing (may cause GPU memory issues)
+            processed, failed = process_pending_ocr_quality()
+            total_processed += processed
+            total_failed += failed
+            
+            processed, failed = process_pending_layout()
+            total_processed += processed
+            total_failed += failed
+            
+            processed, failed = process_pending_metadata_llm()
+            total_processed += processed
+            total_failed += failed
+        
+        return {
+            "success": True,
+            "processed": total_processed,
+            "failed": total_failed
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing pending tasks: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/pending-tasks/process-single")
+async def process_single_paper_pending(
+    request: Request,
+    user: AdminUser = Depends(require_auth)
+):
+    """Process pending tasks for a single paper"""
+    try:
+        data = await request.json()
+        doc_id = data.get('doc_id')
+        
+        if not doc_id:
+            return {"success": False, "error": "No doc_id provided"}
+        
+        paper = Paper.get_or_none(Paper.doc_id == doc_id)
+        if not paper:
+            return {"success": False, "error": "Paper not found"}
+        
+        # Import processing functions
+        from ocr_quality import assess_document_quality
+        from layout import analyze_pdf_layout
+        from metadata import extract_paper_metadata
+        from db import save_layout_analysis, save_metadata
+        from pdf2image import convert_from_path
+        import tempfile
+        
+        tasks_processed = []
+        
+        # Process OCR quality if pending
+        if not paper.ocr_quality_completed:
+            try:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    images = convert_from_path(paper.file_path, first_page=1, last_page=1, dpi=200)
+                    if images:
+                        first_page_path = os.path.join(temp_dir, "first_page.png")
+                        images[0].save(first_page_path, "PNG")
+                        quality_summary, _ = assess_document_quality(first_page_path)
+                        paper.ocr_quality = quality_summary
+                        paper.ocr_quality_completed = True
+                        paper.save()
+                        tasks_processed.append("ocr_quality")
+            except Exception as e:
+                logger.error(f"Error processing OCR quality: {e}")
+        
+        # Process layout if pending
+        if not paper.layout_completed:
+            try:
+                layout_data, layout_success = analyze_pdf_layout(paper.file_path)
+                if layout_success:
+                    page_count = layout_data.get('page_count', 0)
+                    save_layout_analysis(paper.doc_id, layout_data, page_count)
+                    paper.layout_completed = True
+                    paper.save()
+                    tasks_processed.append("layout")
+            except Exception as e:
+                logger.error(f"Error processing layout: {e}")
+        
+        # Process metadata if pending
+        if not paper.metadata_llm_completed and paper.ocr_text:
+            try:
+                metadata, metadata_success = extract_paper_metadata(paper.ocr_text)
+                if metadata_success and metadata.get('extraction_method') in ['structured_llm', 'simple_llm']:
+                    save_metadata(
+                        paper.doc_id,
+                        title=metadata.get('title'),
+                        authors=metadata.get('authors'),
+                        journal=metadata.get('journal'),
+                        year=metadata.get('year'),
+                        doi=metadata.get('doi'),
+                        abstract=metadata.get('abstract'),
+                        keywords=metadata.get('keywords')
+                    )
+                    paper.metadata_llm_completed = True
+                    paper.save()
+                    tasks_processed.append("metadata_llm")
+            except Exception as e:
+                logger.error(f"Error processing metadata: {e}")
+        
+        return {
+            "success": True,
+            "tasks_processed": tasks_processed
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing single paper: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/gpu-status")
+async def get_gpu_status(
+    user: AdminUser = Depends(require_auth)
+):
+    """Get real-time GPU and Ollama status"""
+    try:
+        from gpu_monitor import get_gpu_monitor
+        
+        gpu_monitor = get_gpu_monitor()
+        gpu_status = gpu_monitor.get_comprehensive_status()
+        
+        return {
+            "success": True,
+            "gpu_status": gpu_status,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting GPU status: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Root redirect
 @router.get("/", response_class=HTMLResponse)
 async def admin_root(request: Request):

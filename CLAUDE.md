@@ -196,6 +196,7 @@ RefServer/
 - [x] **백업 관리 API (v0.1.12)**: 7개 엔드포인트 (트리거, 상태, 이력, 복구, 검증)
 - [x] **일관성 검증 API (v0.1.12)**: 4개 엔드포인트 (체크, 요약, 수정)
 - [x] **재해 복구 API (v0.1.12)**: 준비도 평가 엔드포인트
+- [x] **GPU 메모리 관리 API (v0.1.13)**: 4개 엔드포인트 (pending-tasks 관리, 배치 처리, GPU 상태)
 
 ### 🧪 테스트 및 배포 도구 - ✅ 완료
 - [x] `test_api.py`: 전체 API 자동 테스트 스크립트
@@ -305,7 +306,35 @@ docker exec -it refserver python manage_admin.py passwd myadmin
 - 관리자 로그인: http://localhost:8060/admin
 - 기본 계정: admin / admin123
 
-5. **API 테스트**
+5. **GPU 메모리 관리 설정** (v0.1.13)
+```bash
+# GPU 집약적 작업 비활성화 (메모리 절약 모드)
+export ENABLE_GPU_INTENSIVE_TASKS=false
+
+# 또는 docker-compose.yml에서 설정
+environment:
+  - ENABLE_GPU_INTENSIVE_TASKS=false
+```
+
+6. **미처리 GPU 작업 배치 처리** (v0.1.13)
+```bash
+# 권장: 스마트 순차 처리 (자동 GPU 메모리 관리)
+docker exec -it refserver python scripts/batch_process_pending.py --sequential
+
+# Ollama 의존 작업만 처리 (OCR 품질 + LLM 메타데이터)
+docker exec -it refserver python scripts/batch_process_pending.py --ollama-tasks
+
+# Non-Ollama 작업만 처리 (레이아웃 분석)
+docker exec -it refserver python scripts/batch_process_pending.py --non-ollama-tasks
+
+# Ollama 상태 확인
+docker exec -it refserver python scripts/batch_process_pending.py --check-ollama
+
+# 개별 작업 처리
+docker exec -it refserver python scripts/batch_process_pending.py --task layout
+```
+
+7. **API 테스트**
 ```bash
 # 모든 API 엔드포인트 테스트
 python test_api.py
@@ -314,7 +343,7 @@ python test_api.py
 python test_api.py --pdf /path/to/paper.pdf
 ```
 
-6. **API 문서 확인**
+8. **API 문서 확인**
 - Swagger UI: http://localhost:8060/docs
 - ReDoc: http://localhost:8060/redoc
 
@@ -413,4 +442,4 @@ brew install poppler
 - **[ROADMAP.md](./ROADMAP.md)**: 향후 개발 계획 및 로드맵
 - **[tests/TESTING_GUIDE.md](./tests/TESTING_GUIDE.md)**: 종합 테스트 가이드 및 성공 기준
 
-현재 상태: **v0.1.13** - 관리자 대시보드 확장, 5개 새로운 관리 페이지, 레이아웃 분석/보안 설정/데이터베이스 관리 UI, 권한 기반 접근 제어 (진행 중)
+현재 상태: **v0.1.13** - GPU 메모리 부족 문제 해결을 위한 선택적 처리 시스템, 실시간 GPU 메모리 모니터링, Ollama 의존성 기반 스마트 배치 처리 (완료)
