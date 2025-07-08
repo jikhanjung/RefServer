@@ -1,0 +1,102 @@
+huridocs-layout  | 2025-07-02 11:56:32,392 [INFO] Calling endpoint: run
+huridocs-layout  | 2025-07-02 11:56:32,392 [INFO] Processing file: ef1ba3cc-0b36-4b75-93d0-8c36f6be441a.pdf
+huridocs-layout  | 2025-07-02 11:56:32,395 [INFO] Creating PDF images
+huridocs-layout  | Page-1
+huridocs-layout  | Page-2
+huridocs-layout  | Page-3
+huridocs-layout  | Page-4
+huridocs-layout  | Page-5
+huridocs-layout  | Page-6
+huridocs-layout  | Page-7
+huridocs-layout  | Page-8
+huridocs-layout  | Page-9
+huridocs-layout  | Page-10
+huridocs-layout  | Page-11
+huridocs-layout  | Page-12
+huridocs-layout  | Page-13
+huridocs-layout  | 2025-07-02 11:56:32,717 [INFO] Full TransformGens used in training: [ResizeShortestEdge(short_edge_length=(800, 800), max_size=1333, sample_style='choice')], crop: None
+huridocs-layout  | WARNING [07/02 11:56:32 d2.data.datasets.coco]: /app/jsons/test.json contains 3 annotations, but only 0 of them match to images in the file.
+huridocs-layout  | [07/02 11:56:32 d2.data.datasets.coco]: Loaded 13 images in COCO format from /app/jsons/test.json
+huridocs-layout  | [07/02 11:56:32 d2.data.build]: Distribution of instances among all 11 categories:
+huridocs-layout  | |  category  | #instances   |   category    | #instances   |  category   | #instances   |
+huridocs-layout  | |:----------:|:-------------|:-------------:|:-------------|:-----------:|:-------------|
+huridocs-layout  | |  Caption   | 0            |   Footnote    | 0            |   Formula   | 0            |
+huridocs-layout  | | List_Item  | 0            |  Page_Footer  | 0            | Page_Header | 0            |
+huridocs-layout  | |  Picture   | 0            | Section_Hea.. | 0            |    Table    | 0            |
+huridocs-layout  | |    Text    | 0            |     Title     | 0            |             |              |
+huridocs-layout  | |   total    | 0            |               |              |             |              |
+huridocs-layout  | [07/02 11:56:32 d2.data.common]: Serializing the dataset using: <class 'detectron2.data.common._TorchSerializedList'>
+huridocs-layout  | [07/02 11:56:32 d2.data.common]: Serializing 13 elements to byte tensors and concatenating them all ...
+huridocs-layout  | [07/02 11:56:32 d2.data.common]: Serialized dataset takes 0.00 MiB
+huridocs-layout  | [07/02 11:56:32 d2.evaluation.evaluator]: Start inference on 13 batches
+huridocs-layout  | 2025-07-02 11:56:33,053 [ERROR] Error see traceback
+huridocs-layout  | Traceback (most recent call last):
+huridocs-layout  |   File "/app/src/catch_exceptions.py", line 16, in wrapper
+huridocs-layout  |     return await func(*args, **kwargs)
+refserver        | 2025-07-02 11:56:33,057 - layout - ERROR - Layout analysis failed: 422 - {"detail":"Error see traceback"}
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        | 2025-07-02 11:56:33,057 - layout - ERROR - Layout analysis failed: Service error: 422
+huridocs-layout  |   File "/app/src/app.py", line 53, in run
+refserver        | 2025-07-02 11:56:33,057 - pipeline - ERROR - Layout analysis failed: Layout analysis failed: Service error: 422
+huridocs-layout  |     return await run_in_threadpool(analyze_pdf, file.file.read(), "", extraction_format)
+refserver        | 2025-07-02 11:56:33,057 - pipeline - INFO - Step 6: Metadata Extraction
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/starlette/concurrency.py", line 42, in run_in_threadpool
+huridocs-layout  |     return await anyio.to_thread.run_sync(func, *args)
+refserver        | 2025-07-02 11:56:33,063 - metadata - INFO - Starting metadata extraction with LLM
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        | 2025-07-02 11:56:33,063 - metadata - INFO - Sending metadata extraction request to LLM...
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/anyio/to_thread.py", line 56, in run_sync
+huridocs-layout  |     return await get_async_backend().run_sync_in_worker_thread(
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2461, in run_sync_in_worker_thread
+huridocs-layout  |     return await future
+huridocs-layout  |            ^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 962, in run
+huridocs-layout  |     result = context.run(func, *args)
+huridocs-layout  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/src/pdf_layout_analysis/run_pdf_layout_analysis.py", line 59, in analyze_pdf
+huridocs-layout  |     predict_doclaynet()
+huridocs-layout  |   File "/app/src/pdf_layout_analysis/run_pdf_layout_analysis.py", line 50, in predict_doclaynet
+huridocs-layout  |     VGTTrainer.test(configuration, model)
+huridocs-layout  |   File "/app/src/ditod/VGTTrainer.py", line 711, in test
+huridocs-layout  |     results_i = inference_on_dataset(model, data_loader, evaluator)
+huridocs-layout  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/src/detectron2/detectron2/evaluation/evaluator.py", line 165, in inference_on_dataset
+huridocs-layout  |     outputs = model(inputs)
+huridocs-layout  |               ^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+huridocs-layout  |     return self._call_impl(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+huridocs-layout  |     return forward_call(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/src/ditod/VGT.py", line 93, in forward
+huridocs-layout  |     return self.inference(batched_inputs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/src/ditod/VGT.py", line 151, in inference
+huridocs-layout  |     chargrid = self.Wordgrid_embedding(images.tensor, batched_inputs)
+huridocs-layout  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+huridocs-layout  |     return self._call_impl(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+huridocs-layout  |     return forward_call(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/src/ditod/Wordnn_embedding.py", line 91, in forward
+huridocs-layout  |     chargrid_map = self.embedding(chargrid_map)
+huridocs-layout  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+huridocs-layout  |     return self._call_impl(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+huridocs-layout  |     return forward_call(*args, **kwargs)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/modules/sparse.py", line 164, in forward
+huridocs-layout  |     return F.embedding(
+huridocs-layout  |            ^^^^^^^^^^^^
+huridocs-layout  |   File "/app/.venv/lib/python3.11/site-packages/torch/nn/functional.py", line 2267, in embedding
+huridocs-layout  |     return torch.embedding(weight, input, padding_idx, scale_grad_by_freq, sparse)
+huridocs-layout  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+huridocs-layout  | torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.64 GiB. GPU 0 has a total capacity of 7.79 GiB of which 1.22 GiB is free. Process 3942771 has 1.26 GiB memory in use. Process 3943187 has 5.29 GiB memory in use. Of the allocated memory 1.01 GiB is allocated by PyTorch, and 99.30 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+

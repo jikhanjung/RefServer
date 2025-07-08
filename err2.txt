@@ -1,0 +1,530 @@
+(RefServer) (base) paleoadmin@paleo-server:~/projects/RefServer$ docker compose -f docker-compose.prod.yml up
+[+] Running 3/3
+ ✔ Network refserver_default  Created                                                                                                                                               0.1s 
+ ✔ Container huridocs-layout  Created                                                                                                                                               0.0s 
+ ✔ Container refserver        Created                                                                                                                                               0.0s 
+Attaching to huridocs-layout, refserver
+huridocs-layout  | [2025-07-02 11:39:01 +0000] [7] [INFO] Starting gunicorn 22.0.0
+huridocs-layout  | [2025-07-02 11:39:01 +0000] [7] [INFO] Listening at: http://0.0.0.0:5060 (7)
+huridocs-layout  | [2025-07-02 11:39:01 +0000] [7] [INFO] Using worker: uvicorn.workers.UvicornWorker
+huridocs-layout  | [2025-07-02 11:39:01 +0000] [8] [INFO] Booting worker with pid: 8
+huridocs-layout  | 2025-07-02 11:39:05,009 [INFO] No CUDA-compatible GPU detected. Switching to CPU.
+huridocs-layout  | [07/02 11:39:05 detectron2]: Rank of current process: 0. World size: 1
+huridocs-layout  | [07/02 11:39:05 detectron2]: Environment info:
+huridocs-layout  | -------------------------------  -----------------------------------------------------------------
+huridocs-layout  | sys.platform                     linux
+huridocs-layout  | Python                           3.11.9 (main, Apr 19 2024, 16:48:06) [GCC 11.2.0]
+huridocs-layout  | numpy                            1.26.4
+huridocs-layout  | detectron2                       0.6 @/app/src/detectron2/detectron2
+huridocs-layout  | Compiler                         GCC 11.4
+huridocs-layout  | CUDA compiler                    not available
+huridocs-layout  | DETECTRON2_ENV_MODULE            <not set>
+huridocs-layout  | PyTorch                          2.4.0+cu121 @/app/.venv/lib/python3.11/site-packages/torch
+huridocs-layout  | PyTorch debug build              False
+huridocs-layout  | torch._C._GLIBCXX_USE_CXX11_ABI  False
+huridocs-layout  | GPU available                    No: torch.cuda.is_available() == False
+huridocs-layout  | Pillow                           10.4.0
+huridocs-layout  | torchvision                      0.19.0+cu121 @/app/.venv/lib/python3.11/site-packages/torchvision
+huridocs-layout  | fvcore                           0.1.5.post20221221
+huridocs-layout  | iopath                           0.1.9
+huridocs-layout  | cv2                              4.10.0
+huridocs-layout  | -------------------------------  -----------------------------------------------------------------
+huridocs-layout  | PyTorch built with:
+huridocs-layout  |   - GCC 9.3
+huridocs-layout  |   - C++ Version: 201703
+huridocs-layout  |   - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+huridocs-layout  |   - Intel(R) MKL-DNN v3.4.2 (Git Hash 1137e04ec0b5251ca2b4400a4fd3c667ce843d67)
+huridocs-layout  |   - OpenMP 201511 (a.k.a. OpenMP 4.5)
+huridocs-layout  |   - LAPACK is enabled (usually provided by MKL)
+huridocs-layout  |   - NNPACK is enabled
+huridocs-layout  |   - CPU capability usage: AVX2
+huridocs-layout  |   - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=9.1.0, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wsuggest-override -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_VERSION=2.4.0, USE_CUDA=ON, USE_CUDNN=ON, USE_CUSPARSELT=1, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_GLOO=ON, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, USE_ROCM_KERNEL_ASSERT=OFF, 
+huridocs-layout  | 
+huridocs-layout  | [07/02 11:39:05 detectron2]: Command line arguments: Namespace(config_file='/app/src/model_configuration/doclaynet_VGT_cascade_PTM.yaml', resume=False, eval_only=True, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.0.0.1:49253', opts=['MODEL.WEIGHTS', '/app/models/doclaynet_VGT_model.pth', 'OUTPUT_DIR', '/app/model_output_doclaynet'], debug=False)
+huridocs-layout  | [07/02 11:39:05 detectron2]: Contents of args.config_file=/app/src/model_configuration/doclaynet_VGT_cascade_PTM.yaml:
+huridocs-layout  | DATASETS:
+huridocs-layout  |   TEST: ("predict_data",)
+huridocs-layout  |   TRAIN: ("train_data",)
+huridocs-layout  | MODEL:
+huridocs-layout  |   BACKBONE:
+huridocs-layout  |     NAME: build_VGT_fpn_backbone
+huridocs-layout  |   MASK_ON: false
+huridocs-layout  |   META_ARCHITECTURE: VGT
+huridocs-layout  |   PIXEL_MEAN:
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   PIXEL_STD:
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   ROI_BOX_HEAD:
+huridocs-layout  |     CLS_AGNOSTIC_BBOX_REG: true
+huridocs-layout  |   ROI_HEADS:
+huridocs-layout  |     NAME: CascadeROIHeads
+huridocs-layout  |     NUM_CLASSES: 11
+huridocs-layout  |   RPN:
+huridocs-layout  |     POST_NMS_TOPK_TRAIN: 2000
+huridocs-layout  |   VIT:
+huridocs-layout  |     MERGE_TYPE: Sum
+huridocs-layout  |     NAME: VGT_dit_base_patch16
+huridocs-layout  |   WEIGHTS: https://layoutlm.blob.core.windows.net/dit/dit-pts/dit-base-224-p16-500k-62d53a.pth
+huridocs-layout  |   WORDGRID:
+huridocs-layout  |     EMBEDDING_DIM: 64
+huridocs-layout  |     MODEL_PATH: ../models/layoutlm-base-uncased/
+huridocs-layout  |     USE_PRETRAIN_WEIGHT: true
+huridocs-layout  |     VOCAB_SIZE: 30552
+huridocs-layout  | SOLVER:
+huridocs-layout  |   BASE_LR: 0.0002
+huridocs-layout  |   IMS_PER_BATCH: 12
+huridocs-layout  |   MAX_ITER: 10000
+huridocs-layout  |   STEPS: (6000, 8000)
+huridocs-layout  |   WARMUP_ITERS: 100
+huridocs-layout  | TEST:
+huridocs-layout  |   EVAL_PERIOD: 2000
+huridocs-layout  | _BASE_: ./Base-RCNN-FPN.yaml
+huridocs-layout  | 
+huridocs-layout  | [07/02 11:39:05 detectron2]: Running with full config:
+huridocs-layout  | AUG:
+huridocs-layout  |   DETR: true
+huridocs-layout  | CUDNN_BENCHMARK: false
+huridocs-layout  | DATALOADER:
+huridocs-layout  |   ASPECT_RATIO_GROUPING: true
+huridocs-layout  |   FILTER_EMPTY_ANNOTATIONS: false
+huridocs-layout  |   NUM_WORKERS: 6
+huridocs-layout  |   REPEAT_SQRT: true
+huridocs-layout  |   REPEAT_THRESHOLD: 0.0
+huridocs-layout  |   SAMPLER_TRAIN: TrainingSampler
+huridocs-layout  | DATASETS:
+huridocs-layout  |   PRECOMPUTED_PROPOSAL_TOPK_TEST: 1000
+huridocs-layout  |   PRECOMPUTED_PROPOSAL_TOPK_TRAIN: 2000
+huridocs-layout  |   PROPOSAL_FILES_TEST: []
+huridocs-layout  |   PROPOSAL_FILES_TRAIN: []
+huridocs-layout  |   TEST:
+huridocs-layout  |   - predict_data
+huridocs-layout  |   TRAIN:
+huridocs-layout  |   - train_data
+huridocs-layout  | GLOBAL:
+huridocs-layout  |   HACK: 1.0
+huridocs-layout  | INPUT:
+huridocs-layout  |   CROP:
+huridocs-layout  |     ENABLED: true
+huridocs-layout  |     SIZE:
+huridocs-layout  |     - 384
+huridocs-layout  |     - 600
+huridocs-layout  |     TYPE: absolute_range
+huridocs-layout  |   FORMAT: RGB
+huridocs-layout  |   MASK_FORMAT: polygon
+huridocs-layout  |   MAX_SIZE_TEST: 1333
+huridocs-layout  |   MAX_SIZE_TRAIN: 1333
+huridocs-layout  |   MIN_SIZE_TEST: 800
+huridocs-layout  |   MIN_SIZE_TRAIN:
+huridocs-layout  |   - 480
+huridocs-layout  |   - 512
+huridocs-layout  |   - 544
+huridocs-layout  |   - 576
+huridocs-layout  |   - 608
+huridocs-layout  |   - 640
+huridocs-layout  |   - 672
+huridocs-layout  |   - 704
+huridocs-layout  |   - 736
+huridocs-layout  |   - 768
+huridocs-layout  |   - 800
+huridocs-layout  |   MIN_SIZE_TRAIN_SAMPLING: choice
+huridocs-layout  |   RANDOM_FLIP: horizontal
+huridocs-layout  | MODEL:
+huridocs-layout  |   ANCHOR_GENERATOR:
+huridocs-layout  |     ANGLES:
+huridocs-layout  |     - - -90
+huridocs-layout  |       - 0
+huridocs-layout  |       - 90
+huridocs-layout  |     ASPECT_RATIOS:
+huridocs-layout  |     - - 0.5
+huridocs-layout  |       - 1.0
+huridocs-layout  |       - 2.0
+huridocs-layout  |     NAME: DefaultAnchorGenerator
+huridocs-layout  |     OFFSET: 0.0
+huridocs-layout  |     SIZES:
+huridocs-layout  |     - - 32
+huridocs-layout  |     - - 64
+huridocs-layout  |     - - 128
+huridocs-layout  |     - - 256
+huridocs-layout  |     - - 512
+huridocs-layout  |   BACKBONE:
+huridocs-layout  |     FREEZE_AT: 2
+huridocs-layout  |     NAME: build_VGT_fpn_backbone
+huridocs-layout  |   DEVICE: cpu
+huridocs-layout  |   FPN:
+huridocs-layout  |     FUSE_TYPE: sum
+huridocs-layout  |     IN_FEATURES:
+huridocs-layout  |     - layer3
+huridocs-layout  |     - layer5
+huridocs-layout  |     - layer7
+huridocs-layout  |     - layer11
+huridocs-layout  |     NORM: ''
+huridocs-layout  |     OUT_CHANNELS: 256
+huridocs-layout  |   KEYPOINT_ON: false
+huridocs-layout  |   LOAD_PROPOSALS: false
+huridocs-layout  |   MASK_ON: false
+huridocs-layout  |   META_ARCHITECTURE: VGT
+huridocs-layout  |   PANOPTIC_FPN:
+huridocs-layout  |     COMBINE:
+huridocs-layout  |       ENABLED: true
+huridocs-layout  |       INSTANCES_CONFIDENCE_THRESH: 0.5
+huridocs-layout  |       OVERLAP_THRESH: 0.5
+huridocs-layout  |       STUFF_AREA_LIMIT: 4096
+huridocs-layout  |     INSTANCE_LOSS_WEIGHT: 1.0
+huridocs-layout  |   PIXEL_MEAN:
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   PIXEL_STD:
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   - 127.5
+huridocs-layout  |   PROPOSAL_GENERATOR:
+huridocs-layout  |     MIN_SIZE: 0
+huridocs-layout  |     NAME: RPN
+huridocs-layout  |   RESNETS:
+huridocs-layout  |     DEFORM_MODULATED: false
+huridocs-layout  |     DEFORM_NUM_GROUPS: 1
+huridocs-layout  |     DEFORM_ON_PER_STAGE:
+huridocs-layout  |     - false
+huridocs-layout  |     - false
+huridocs-layout  |     - false
+huridocs-layout  |     - false
+huridocs-layout  |     DEPTH: 50
+huridocs-layout  |     NORM: FrozenBN
+huridocs-layout  |     NUM_GROUPS: 1
+huridocs-layout  |     OUT_FEATURES:
+huridocs-layout  |     - res4
+huridocs-layout  |     RES2_OUT_CHANNELS: 256
+huridocs-layout  |     RES5_DILATION: 1
+huridocs-layout  |     STEM_OUT_CHANNELS: 64
+huridocs-layout  |     STRIDE_IN_1X1: true
+huridocs-layout  |     WIDTH_PER_GROUP: 64
+huridocs-layout  |   RETINANET:
+huridocs-layout  |     BBOX_REG_LOSS_TYPE: smooth_l1
+huridocs-layout  |     BBOX_REG_WEIGHTS: &id002
+huridocs-layout  |     - 1.0
+huridocs-layout  |     - 1.0
+huridocs-layout  |     - 1.0
+huridocs-layout  |     - 1.0
+huridocs-layout  |     FOCAL_LOSS_ALPHA: 0.25
+huridocs-layout  |     FOCAL_LOSS_GAMMA: 2.0
+huridocs-layout  |     IN_FEATURES:
+huridocs-layout  |     - p3
+huridocs-layout  |     - p4
+huridocs-layout  |     - p5
+huridocs-layout  |     - p6
+huridocs-layout  |     - p7
+huridocs-layout  |     IOU_LABELS:
+huridocs-layout  |     - 0
+huridocs-layout  |     - -1
+huridocs-layout  |     - 1
+huridocs-layout  |     IOU_THRESHOLDS:
+huridocs-layout  |     - 0.4
+huridocs-layout  |     - 0.5
+huridocs-layout  |     NMS_THRESH_TEST: 0.5
+huridocs-layout  |     NORM: ''
+huridocs-layout  |     NUM_CLASSES: 80
+huridocs-layout  |     NUM_CONVS: 4
+huridocs-layout  |     PRIOR_PROB: 0.01
+huridocs-layout  |     SCORE_THRESH_TEST: 0.05
+huridocs-layout  |     SMOOTH_L1_LOSS_BETA: 0.1
+huridocs-layout  |     TOPK_CANDIDATES_TEST: 1000
+huridocs-layout  |   ROI_BOX_CASCADE_HEAD:
+huridocs-layout  |     BBOX_REG_WEIGHTS:
+huridocs-layout  |     - &id001
+huridocs-layout  |       - 10.0
+huridocs-layout  |       - 10.0
+huridocs-layout  |       - 5.0
+huridocs-layout  |       - 5.0
+huridocs-layout  |     - - 20.0
+huridocs-layout  |       - 20.0
+huridocs-layout  |       - 10.0
+huridocs-layout  |       - 10.0
+huridocs-layout  |     - - 30.0
+huridocs-layout  |       - 30.0
+huridocs-layout  |       - 15.0
+huridocs-layout  |       - 15.0
+huridocs-layout  |     IOUS:
+huridocs-layout  |     - 0.5
+huridocs-layout  |     - 0.6
+huridocs-layout  |     - 0.7
+huridocs-layout  |   ROI_BOX_HEAD:
+huridocs-layout  |     BBOX_REG_LOSS_TYPE: smooth_l1
+huridocs-layout  |     BBOX_REG_LOSS_WEIGHT: 1.0
+huridocs-layout  |     BBOX_REG_WEIGHTS: *id001
+huridocs-layout  |     CLS_AGNOSTIC_BBOX_REG: true
+huridocs-layout  |     CONV_DIM: 256
+huridocs-layout  |     FC_DIM: 1024
+huridocs-layout  |     FED_LOSS_FREQ_WEIGHT_POWER: 0.5
+huridocs-layout  |     FED_LOSS_NUM_CLASSES: 50
+huridocs-layout  |     NAME: FastRCNNConvFCHead
+huridocs-layout  |     NORM: ''
+huridocs-layout  |     NUM_CONV: 0
+huridocs-layout  |     NUM_FC: 2
+huridocs-layout  |     POOLER_RESOLUTION: 7
+huridocs-layout  |     POOLER_SAMPLING_RATIO: 0
+huridocs-layout  |     POOLER_TYPE: ROIAlignV2
+huridocs-layout  |     SMOOTH_L1_BETA: 0.0
+huridocs-layout  |     TRAIN_ON_PRED_BOXES: false
+huridocs-layout  |     USE_FED_LOSS: false
+huridocs-layout  |     USE_SIGMOID_CE: false
+huridocs-layout  |   ROI_HEADS:
+huridocs-layout  |     BATCH_SIZE_PER_IMAGE: 512
+huridocs-layout  |     IN_FEATURES:
+huridocs-layout  |     - p2
+huridocs-layout  |     - p3
+huridocs-layout  |     - p4
+huridocs-layout  |     - p5
+huridocs-layout  |     IOU_LABELS:
+huridocs-layout  |     - 0
+huridocs-layout  |     - 1
+huridocs-layout  |     IOU_THRESHOLDS:
+huridocs-layout  |     - 0.5
+huridocs-layout  |     NAME: CascadeROIHeads
+huridocs-layout  |     NMS_THRESH_TEST: 0.5
+huridocs-layout  |     NUM_CLASSES: 11
+huridocs-layout  |     POSITIVE_FRACTION: 0.25
+huridocs-layout  |     PROPOSAL_APPEND_GT: true
+huridocs-layout  |     SCORE_THRESH_TEST: 0.05
+huridocs-layout  |   ROI_KEYPOINT_HEAD:
+huridocs-layout  |     CONV_DIMS:
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     - 512
+huridocs-layout  |     LOSS_WEIGHT: 1.0
+huridocs-layout  |     MIN_KEYPOINTS_PER_IMAGE: 1
+huridocs-layout  |     NAME: KRCNNConvDeconvUpsampleHead
+huridocs-layout  |     NORMALIZE_LOSS_BY_VISIBLE_KEYPOINTS: true
+huridocs-layout  |     NUM_KEYPOINTS: 17
+huridocs-layout  |     POOLER_RESOLUTION: 14
+huridocs-layout  |     POOLER_SAMPLING_RATIO: 0
+huridocs-layout  |     POOLER_TYPE: ROIAlignV2
+huridocs-layout  |   ROI_MASK_HEAD:
+huridocs-layout  |     CLS_AGNOSTIC_MASK: false
+huridocs-layout  |     CONV_DIM: 256
+huridocs-layout  |     NAME: MaskRCNNConvUpsampleHead
+huridocs-layout  |     NORM: ''
+huridocs-layout  |     NUM_CONV: 4
+huridocs-layout  |     POOLER_RESOLUTION: 14
+huridocs-layout  |     POOLER_SAMPLING_RATIO: 0
+huridocs-layout  |     POOLER_TYPE: ROIAlignV2
+huridocs-layout  |   RPN:
+huridocs-layout  |     BATCH_SIZE_PER_IMAGE: 256
+huridocs-layout  |     BBOX_REG_LOSS_TYPE: smooth_l1
+huridocs-layout  |     BBOX_REG_LOSS_WEIGHT: 1.0
+huridocs-layout  |     BBOX_REG_WEIGHTS: *id002
+huridocs-layout  |     BOUNDARY_THRESH: -1
+huridocs-layout  |     CONV_DIMS:
+huridocs-layout  |     - -1
+huridocs-layout  |     HEAD_NAME: StandardRPNHead
+huridocs-layout  |     IN_FEATURES:
+huridocs-layout  |     - p2
+huridocs-layout  |     - p3
+huridocs-layout  |     - p4
+huridocs-layout  |     - p5
+huridocs-layout  |     - p6
+huridocs-layout  |     IOU_LABELS:
+huridocs-layout  |     - 0
+huridocs-layout  |     - -1
+huridocs-layout  |     - 1
+huridocs-layout  |     IOU_THRESHOLDS:
+huridocs-layout  |     - 0.3
+huridocs-layout  |     - 0.7
+huridocs-layout  |     LOSS_WEIGHT: 1.0
+huridocs-layout  |     NMS_THRESH: 0.7
+huridocs-layout  |     POSITIVE_FRACTION: 0.5
+huridocs-layout  |     POST_NMS_TOPK_TEST: 1000
+huridocs-layout  |     POST_NMS_TOPK_TRAIN: 2000
+huridocs-layout  |     PRE_NMS_TOPK_TEST: 1000
+huridocs-layout  |     PRE_NMS_TOPK_TRAIN: 2000
+huridocs-layout  |     SMOOTH_L1_BETA: 0.0
+huridocs-layout  |   SEM_SEG_HEAD:
+huridocs-layout  |     COMMON_STRIDE: 4
+huridocs-layout  |     CONVS_DIM: 128
+huridocs-layout  |     IGNORE_VALUE: 255
+huridocs-layout  |     IN_FEATURES:
+huridocs-layout  |     - p2
+huridocs-layout  |     - p3
+huridocs-layout  |     - p4
+huridocs-layout  |     - p5
+huridocs-layout  |     LOSS_WEIGHT: 1.0
+huridocs-layout  |     NAME: SemSegFPNHead
+huridocs-layout  |     NORM: GN
+huridocs-layout  |     NUM_CLASSES: 54
+huridocs-layout  |   VIT:
+huridocs-layout  |     DROP_PATH: 0.1
+huridocs-layout  |     IMG_SIZE:
+huridocs-layout  |     - 224
+huridocs-layout  |     - 224
+huridocs-layout  |     MERGE_TYPE: Sum
+huridocs-layout  |     MODEL_KWARGS: '{}'
+huridocs-layout  |     NAME: VGT_dit_base_patch16
+huridocs-layout  |     OUT_FEATURES:
+huridocs-layout  |     - layer3
+huridocs-layout  |     - layer5
+huridocs-layout  |     - layer7
+huridocs-layout  |     - layer11
+huridocs-layout  |     POS_TYPE: abs
+huridocs-layout  |   WEIGHTS: /app/models/doclaynet_VGT_model.pth
+huridocs-layout  |   WORDGRID:
+huridocs-layout  |     EMBEDDING_DIM: 64
+huridocs-layout  |     HIDDEN_SIZE: 768
+huridocs-layout  |     MODEL_PATH: ../models/layoutlm-base-uncased/
+huridocs-layout  |     USE_PRETRAIN_WEIGHT: true
+huridocs-layout  |     USE_UNK_TEXT: false
+huridocs-layout  |     VOCAB_SIZE: 30552
+huridocs-layout  | OUTPUT_DIR: /app/model_output_doclaynet
+huridocs-layout  | SEED: 42
+huridocs-layout  | SOLVER:
+huridocs-layout  |   AMP:
+huridocs-layout  |     ENABLED: true
+huridocs-layout  |   BACKBONE_MULTIPLIER: 1.0
+huridocs-layout  |   BASE_LR: 0.0002
+huridocs-layout  |   BASE_LR_END: 0.0
+huridocs-layout  |   BIAS_LR_FACTOR: 1.0
+huridocs-layout  |   CHECKPOINT_PERIOD: 5000
+huridocs-layout  |   CLIP_GRADIENTS:
+huridocs-layout  |     CLIP_TYPE: full_model
+huridocs-layout  |     CLIP_VALUE: 1.0
+huridocs-layout  |     ENABLED: true
+huridocs-layout  |     NORM_TYPE: 2.0
+huridocs-layout  |   GAMMA: 0.1
+huridocs-layout  |   IMS_PER_BATCH: 12
+huridocs-layout  |   LR_SCHEDULER_NAME: WarmupCosineLR
+huridocs-layout  |   MAX_ITER: 10000
+huridocs-layout  |   MOMENTUM: 0.9
+huridocs-layout  |   NESTEROV: false
+huridocs-layout  |   NUM_DECAYS: 3
+huridocs-layout  |   OPTIMIZER: ADAMW
+huridocs-layout  |   REFERENCE_WORLD_SIZE: 0
+huridocs-layout  |   RESCALE_INTERVAL: false
+huridocs-layout  |   STEPS:
+huridocs-layout  |   - 6000
+huridocs-layout  |   - 8000
+huridocs-layout  |   WARMUP_FACTOR: 0.01
+huridocs-layout  |   WARMUP_ITERS: 100
+huridocs-layout  |   WARMUP_METHOD: linear
+huridocs-layout  |   WEIGHT_DECAY: 0.05
+huridocs-layout  |   WEIGHT_DECAY_BIAS: null
+huridocs-layout  |   WEIGHT_DECAY_NORM: 0.0
+huridocs-layout  | TEST:
+huridocs-layout  |   AUG:
+huridocs-layout  |     ENABLED: false
+huridocs-layout  |     FLIP: true
+huridocs-layout  |     MAX_SIZE: 4000
+huridocs-layout  |     MIN_SIZES:
+huridocs-layout  |     - 400
+huridocs-layout  |     - 500
+huridocs-layout  |     - 600
+huridocs-layout  |     - 700
+huridocs-layout  |     - 800
+huridocs-layout  |     - 900
+huridocs-layout  |     - 1000
+huridocs-layout  |     - 1100
+huridocs-layout  |     - 1200
+huridocs-layout  |   DETECTIONS_PER_IMAGE: 100
+huridocs-layout  |   EVAL_PERIOD: 2000
+huridocs-layout  |   EXPECTED_RESULTS: []
+huridocs-layout  |   KEYPOINT_OKS_SIGMAS: []
+huridocs-layout  |   PRECISE_BN:
+huridocs-layout  |     ENABLED: false
+huridocs-layout  |     NUM_ITER: 200
+huridocs-layout  | VERSION: 2
+huridocs-layout  | VIS_PERIOD: 0
+huridocs-layout  | 
+huridocs-layout  | [07/02 11:39:05 detectron2]: Full config saved to /app/model_output_doclaynet/config.yaml
+refserver        | 2025-07-02 11:39:05,587 - __main__ - INFO - Starting database initialization...
+refserver        | 2025-07-02 11:39:05,587 - db - INFO - Connected to database: /refdata/refserver.db
+refserver        | 2025-07-02 11:39:05,587 - peewee_migrate.logs - INFO - Starting migrations
+refserver        | 2025-07-02 11:39:05,590 - peewee_migrate.logs - INFO - There is nothing to migrate
+refserver        | 2025-07-02 11:39:05,590 - db - INFO - Database migrations completed successfully
+refserver        | 2025-07-02 11:39:05,590 - __main__ - INFO - Database initialization completed successfully
+refserver        | 2025-07-02 11:39:05,592 - __main__ - INFO - Checking for default admin user...
+refserver        | 2025-07-02 11:39:05,593 - __main__ - INFO - ✅ Default admin user ensured (username: admin, password: admin123)
+huridocs-layout  | [07/02 11:39:07 detectron2]: Merge using: Sum
+huridocs-layout  | /app/src/ditod/Wordnn_embedding.py:48: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+huridocs-layout  |   state_dict = torch.load(bros_embedding_path + "pytorch_model.bin", map_location="cpu")
+huridocs-layout  | use_pretrain_weight: load model from: ../models/layoutlm-base-uncased/
+huridocs-layout  | [07/02 11:39:07 detectron2]: Model: Trainable network params num : 243,296,319
+huridocs-layout  | [07/02 11:39:07 d2.checkpoint.detection_checkpoint]: [DetectionCheckpointer] Loading from /app/models/doclaynet_VGT_model.pth ...
+huridocs-layout  | [07/02 11:39:07 fvcore.common.checkpoint]: [Checkpointer] Loading from /app/models/doclaynet_VGT_model.pth ...
+huridocs-layout  | /app/.venv/lib/python3.11/site-packages/fvcore-0.1.5.post20221221-py3.11.egg/fvcore/common/checkpoint.py:252: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+huridocs-layout  | 2025-07-02 11:39:08,803 [INFO] Is PyTorch using GPU: False
+huridocs-layout  | [2025-07-02 11:39:08 +0000] [8] [INFO] Started server process [8]
+huridocs-layout  | [2025-07-02 11:39:08 +0000] [8] [INFO] Waiting for application startup.
+huridocs-layout  | [2025-07-02 11:39:08 +0000] [8] [INFO] Application startup complete.
+refserver        | INFO:     Started server process [30]
+refserver        | INFO:     Waiting for application startup.
+refserver        | 2025-07-02 11:39:10,523 - main - INFO - 🚀 RefServer starting up...
+refserver        | 2025-07-02 11:39:10,523 - main - INFO - ✅ Background job cleanup scheduler started
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+refserver        | 2025-07-02 11:39:10,550 - RefServerBackup - INFO - SQLiteBackupManager initialized with db_path=/refdata/refserver.db
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Added job "Daily Full Backup" to job store "default"
+refserver        | 2025-07-02 11:39:10,550 - apscheduler.scheduler - INFO - Added job "Weekly Full Backup" to job store "default"
+refserver        | 2025-07-02 11:39:10,551 - apscheduler.scheduler - INFO - Added job "Hourly Incremental Backup" to job store "default"
+refserver        | 2025-07-02 11:39:10,551 - apscheduler.scheduler - INFO - Added job "Cleanup Old Backups" to job store "default"
+refserver        | 2025-07-02 11:39:10,551 - apscheduler.scheduler - INFO - Added job "Backup Health Check" to job store "default"
+refserver        | 2025-07-02 11:39:10,551 - apscheduler.scheduler - INFO - Added job "Daily Consistency Check" to job store "default"
+refserver        | 2025-07-02 11:39:10,551 - apscheduler.scheduler - INFO - Scheduler started
+refserver        | 2025-07-02 11:39:10,551 - RefServerBackup - INFO - Backup scheduler started
+refserver        | 2025-07-02 11:39:10,551 - main - INFO - ✅ Backup scheduler started
+refserver        | 2025-07-02 11:39:10,551 - main - INFO - 🚀 Starting RefServer v0.1.12...
+refserver        | 2025-07-02 11:39:10,616 - chromadb.telemetry.product.posthog - ERROR - Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+refserver        | 2025-07-02 11:39:10,616 - vector_db - INFO - ✅ ChromaDB initialized at /refdata/chromadb
+refserver        | 2025-07-02 11:39:10,616 - chromadb.telemetry.product.posthog - ERROR - Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+refserver        | 2025-07-02 11:39:10,617 - chromadb.telemetry.product.posthog - ERROR - Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+refserver        | 2025-07-02 11:39:10,618 - vector_db - INFO - ChromaDB collections initialized successfully
+refserver        | 2025-07-02 11:39:10,618 - vector_db - INFO - ✅ ChromaDB initialized successfully
+refserver        | 2025-07-02 11:39:10,618 - main - INFO - ✅ ChromaDB initialized successfully
+refserver        | 2025-07-02 11:39:10,618 - pipeline - INFO - Initialized PDF processing pipeline with data directory: /refdata
+refserver        | 2025-07-02 11:39:10,618 - pipeline - INFO - Checking service status...
+refserver        | 2025-07-02 11:39:10,618 - ocr_quality - INFO - Initialized LLaVA assessor with host: http://host.docker.internal:11434
+refserver        | 2025-07-02 11:39:10,619 - service_circuit_breaker - INFO - Initialized circuit breaker for ollama_llava
+refserver        | 2025-07-02 11:39:10,619 - service_circuit_breaker - INFO - Initialized circuit breaker for ollama_metadata
+refserver        | 2025-07-02 11:39:10,619 - service_circuit_breaker - INFO - Initialized circuit breaker for huridocs_layout
+refserver        | 2025-07-02 11:39:10,622 - layout - INFO - Initialized Huridocs layout analyzer with URL: http://huridocs-layout:5060
+refserver        | 2025-07-02 11:39:10,933 - db - INFO - Connected to database: /refdata/refserver.db
+refserver        | 2025-07-02 11:39:10,933 - peewee_migrate.logs - INFO - Starting migrations
+refserver        | 2025-07-02 11:39:10,935 - peewee_migrate.logs - INFO - There is nothing to migrate
+refserver        | 2025-07-02 11:39:10,935 - db - INFO - Database migrations completed successfully
+refserver        | 2025-07-02 11:39:10,935 - pipeline - INFO - Database: Available
+refserver        | 2025-07-02 11:39:10,937 - pipeline - INFO - Quality Assessment: Available
+refserver        | 2025-07-02 11:39:11,237 - pipeline - INFO - Layout Analysis: Available
+refserver        | 2025-07-02 11:39:11,237 - metadata - INFO - Initialized metadata extractor with host: http://host.docker.internal:11434
+refserver        | 2025-07-02 11:39:11,237 - metadata - INFO - Using model: llama3.2
+refserver        | 2025-07-02 11:39:11,239 - pipeline - INFO - Metadata Extraction: Available
+refserver        | 2025-07-02 11:39:11,239 - main - INFO - Service status: {'database': True, 'quality_assessment': True, 'layout_analysis': True, 'metadata_extraction': True, 'timestamp': 1751456350.9335744, 'version': 'v0.1.12', 'deployment_mode': 'GPU'}
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO - BackgroundScheduler initialized
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO - 🕒 Starting background scheduler...
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO - 📅 Scheduled background tasks:
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO -   - Daily cleanup: Every day at 2:00 AM
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO -   - Weekly comprehensive cleanup: Sundays at 3:00 AM
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO -   - Monthly deep cleanup: 1st day of month at 4:00 AM
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO - 📍 Scheduler loop started
+refserver        | 2025-07-02 11:39:11,239 - scheduler - INFO - ✅ Background scheduler started successfully
+refserver        | 2025-07-02 11:39:11,239 - main - INFO - ✅ Background scheduler started
+refserver        | 2025-07-02 11:39:11,240 - main - INFO - ✅ RefServer v0.1.12 startup completed
+refserver        | 2025-07-02 11:39:11,240 - main - INFO - Starting background job cleanup scheduler
+refserver        | INFO:     Application startup complete.
+refserver        | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Gracefully stopping... (press Ctrl+C again to force)
+[+] Stopping 2/2
+ ✔ Container refserver        Stopped                                                                                                                                              10.2s 
+ ✔ Container huridocs-layout  Stopped                                                                                                                                              10.4s 
+(RefServer) (base) paleoadmin@paleo-server:~/projects/RefServer$ ^C
+(RefServer) (base) paleoadmin@paleo-server:~/projects/RefServer$ 
+

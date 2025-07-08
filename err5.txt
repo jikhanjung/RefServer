@@ -1,0 +1,251 @@
+refserver        | INFO:     172.16.116.151:61868 - "GET /admin/page-viewer/7c97afe2-82be-43b1-836a-02219e0438d5/3 HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:26:36,664 - admin - INFO - Generating image for page 3 of /refdata/pdfs/7c97afe2-82be-43b1-836a-02219e0438d5.pdf
+refserver        | 2025-07-08 06:26:36,664 - admin - INFO - Converting PDF to image with poppler_path: /usr/bin
+refserver        | 2025-07-08 06:26:37,111 - admin - INFO - Successfully converted page 3 to image
+refserver        | 2025-07-08 06:26:37,238 - admin - INFO - Image size: 902977 bytes
+refserver        | INFO:     172.16.116.151:61868 - "GET /admin/page-image/7c97afe2-82be-43b1-836a-02219e0438d5/3 HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:26:39,082 - admin - INFO - Re-OCR starting for 7c97afe2-82be-43b1-836a-02219e0438d5 page 3 using Tesseract
+refserver        | 2025-07-08 06:26:39,082 - ocr - INFO - Starting hybrid language detection
+refserver        | 2025-07-08 06:26:39,123 - ocr - INFO - Extracted text from 13 pages
+refserver        | 2025-07-08 06:26:39,128 - ocr - INFO - Detected language: en (confidence: 1.00)
+refserver        | 2025-07-08 06:26:39,128 - ocr - INFO - Text-based detection successful: eng
+refserver        | 2025-07-08 06:26:39,128 - admin - INFO - Using language eng for OCR
+refserver        | 2025-07-08 06:26:43,160 - ocr - INFO - Total breaks: Tier 1 (9) + Tier 2 (12) = 21
+refserver        | 2025-07-08 06:26:43,160 - ocr - INFO - Generated 48 lines → 22 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:26:43,160 - ocr - INFO - Paragraph breaks applied at line positions: [1, 2, 5, 6, 7, 10, 12, 13, 14, 21, 22, 23, 24, 25, 29, 31, 32, 34, 35, 40, 41]
+refserver        | 2025-07-08 06:26:43,160 - ocr - INFO - Tesseract OCR page 3: 3403 chars, confidence: 93.9
+refserver        | 2025-07-08 06:26:43,160 - admin - INFO - Tesseract OCR extracted 3403 characters with 93.9% confidence
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.62s/it]
+refserver        | 2025-07-08 06:26:44,785 - embedding - INFO - Generated embedding with shape (1024,)
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.38s/it]
+refserver        | 2025-07-08 06:26:46,169 - embedding - INFO - Generated embedding with shape (1024,)
+refserver        | 2025-07-08 06:26:46,169 - admin - ERROR - Failed to compare embeddings: compare_embeddings() takes 2 positional arguments but 4 were given
+refserver        | 2025-07-08 06:26:46,169 - admin - INFO - Tesseract re-OCR completed for 7c97afe2-82be-43b1-836a-02219e0438d5 page 3, awaiting user selection
+refserver        | INFO:     172.16.116.151:61868 - "POST /admin/page-viewer/7c97afe2-82be-43b1-836a-02219e0438d5/3/re-ocr HTTP/1.1" 200 OK
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.40s/it]
+refserver        | 2025-07-08 06:26:57,642 - embedding - INFO - Generated embedding with shape (1024,)
+refserver        | 2025-07-08 06:26:57,657 - admin - INFO - Updated page embedding for page 3
+refserver        | INFO:     172.16.116.151:61878 - "POST /admin/page-viewer/7c97afe2-82be-43b1-836a-02219e0438d5/3/apply-ocr HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:26:57,666 - admin - INFO - Starting full document re-OCR for 7c97afe2-82be-43b1-836a-02219e0438d5
+refserver        | INFO:     172.16.116.151:61878 - "POST /admin/papers/7c97afe2-82be-43b1-836a-02219e0438d5/full-ocr HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:26:57,672 - admin - INFO - Processing full document OCR for 7c97afe2-82be-43b1-836a-02219e0438d5
+refserver        | 2025-07-08 06:26:57,672 - admin - INFO - PDF path: /refdata/pdfs/7c97afe2-82be-43b1-836a-02219e0438d5.pdf
+refserver        | 2025-07-08 06:26:57,675 - ocr - INFO - Starting hybrid language detection
+refserver        | 2025-07-08 06:26:57,715 - ocr - INFO - Extracted text from 13 pages
+refserver        | 2025-07-08 06:26:57,721 - ocr - INFO - Detected language: en (confidence: 1.00)
+refserver        | 2025-07-08 06:26:57,721 - ocr - INFO - Text-based detection successful: eng
+refserver        | 2025-07-08 06:26:57,721 - admin - INFO - Detected language: eng for full document OCR
+refserver        | 2025-07-08 06:26:57,759 - ocr - INFO - Extracted page texts from 13 pages
+refserver        | 2025-07-08 06:26:57,759 - admin - INFO - Step 1: Processing individual pages...
+refserver        | INFO:     172.16.116.151:61878 - "GET /admin/page-viewer/7c97afe2-82be-43b1-836a-02219e0438d5/3 HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:27:00,759 - admin - INFO - Generating image for page 3 of /refdata/pdfs/7c97afe2-82be-43b1-836a-02219e0438d5.pdf
+refserver        | 2025-07-08 06:27:00,759 - admin - INFO - Converting PDF to image with poppler_path: /usr/bin
+refserver        | 2025-07-08 06:27:00,775 - ocr - INFO - Total breaks: Tier 1 (12) + Tier 2 (6) = 18
+refserver        | 2025-07-08 06:27:00,775 - ocr - INFO - Generated 36 lines → 19 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:00,775 - ocr - INFO - Paragraph breaks applied at line positions: [0, 1, 2, 3, 4, 5, 6, 13, 14, 17, 18, 22, 23, 26, 27, 29, 30, 31]
+refserver        | 2025-07-08 06:27:00,775 - ocr - INFO - Tesseract OCR page 1: 2441 chars, confidence: 90.4
+refserver        | 2025-07-08 06:27:00,789 - admin - INFO - Processed page 1/13
+refserver        | 2025-07-08 06:27:01,208 - admin - INFO - Successfully converted page 3 to image
+refserver        | 2025-07-08 06:27:01,339 - admin - INFO - Image size: 902977 bytes
+refserver        | INFO:     172.16.116.151:61878 - "GET /admin/page-image/7c97afe2-82be-43b1-836a-02219e0438d5/3 HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:27:03,731 - ocr - INFO - Total breaks: Tier 1 (13) + Tier 2 (6) = 19
+refserver        | 2025-07-08 06:27:03,731 - ocr - INFO - Generated 37 lines → 20 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:03,731 - ocr - INFO - Paragraph breaks applied at line positions: [1, 7, 8, 9, 11, 14, 15, 17, 19, 21, 22, 24, 25, 26, 27, 28, 30, 33, 35]
+refserver        | 2025-07-08 06:27:03,731 - ocr - INFO - Tesseract OCR page 2: 1472 chars, confidence: 80.3
+refserver        | 2025-07-08 06:27:03,741 - admin - INFO - Processed page 2/13
+refserver        | 2025-07-08 06:27:03,911 - admin - INFO - Database closed: False
+refserver        | 2025-07-08 06:27:03,911 - admin - INFO - Papers page: Direct count = 1, Query count = 1
+refserver        | 2025-07-08 06:27:03,912 - admin - INFO - All papers in DB: ['7c97afe2-82be-43b1-836a-02219e0438d5']
+refserver        | 2025-07-08 06:27:03,912 - admin - INFO - Added paper 7c97afe2-82be-43b1-836a-02219e0438d5 to list
+refserver        | 2025-07-08 06:27:03,912 - admin - INFO - Final papers_list length: 1
+refserver        | INFO:     172.16.116.151:61878 - "GET /admin/papers HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:27:07,817 - ocr - INFO - Total breaks: Tier 1 (9) + Tier 2 (12) = 21
+refserver        | 2025-07-08 06:27:07,817 - ocr - INFO - Generated 48 lines → 22 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:07,817 - ocr - INFO - Paragraph breaks applied at line positions: [1, 2, 5, 6, 7, 10, 12, 13, 14, 21, 22, 23, 24, 25, 29, 31, 32, 34, 35, 40, 41]
+refserver        | 2025-07-08 06:27:07,817 - ocr - INFO - Tesseract OCR page 3: 3403 chars, confidence: 93.9
+refserver        | 2025-07-08 06:27:07,828 - admin - INFO - Processed page 3/13
+refserver        | INFO:     172.16.116.151:61878 - "GET /admin/queue HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:27:10,226 - ocr - INFO - Total breaks: Tier 1 (12) + Tier 2 (3) = 15
+refserver        | 2025-07-08 06:27:10,226 - ocr - INFO - Generated 25 lines → 16 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:10,226 - ocr - INFO - Paragraph breaks applied at line positions: [0, 1, 3, 5, 6, 7, 8, 9, 10, 11, 14, 17, 20, 21, 22]
+refserver        | 2025-07-08 06:27:10,226 - ocr - INFO - Tesseract OCR page 4: 438 chars, confidence: 79.2
+refserver        | 2025-07-08 06:27:15,230 - admin - ERROR - Error processing page 4: database is locked
+refserver        | 2025-07-08 06:27:18,779 - ocr - INFO - Total breaks: Tier 1 (4) + Tier 2 (13) = 17
+refserver        | 2025-07-08 06:27:18,779 - ocr - INFO - Generated 44 lines → 18 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:18,779 - ocr - INFO - Paragraph breaks applied at line positions: [0, 2, 8, 9, 10, 11, 12, 18, 19, 20, 25, 26, 34, 36, 37, 38, 40]
+refserver        | 2025-07-08 06:27:18,779 - ocr - INFO - Tesseract OCR page 5: 2889 chars, confidence: 93.8
+refserver        | 2025-07-08 06:27:23,791 - admin - ERROR - Error processing page 5: database is locked
+refserver        | 2025-07-08 06:27:27,747 - ocr - INFO - Total breaks: Tier 1 (4) + Tier 2 (16) = 20
+refserver        | 2025-07-08 06:27:27,747 - ocr - INFO - Generated 52 lines → 21 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:27,747 - ocr - INFO - Paragraph breaks applied at line positions: [0, 2, 8, 9, 15, 16, 18, 22, 23, 25, 26, 27, 29, 33, 34, 37, 38, 46, 47, 50]
+refserver        | 2025-07-08 06:27:27,747 - ocr - INFO - Tesseract OCR page 6: 2986 chars, confidence: 93.7
+refserver        | 2025-07-08 06:27:27,757 - admin - INFO - Processed page 6/13
+refserver        | 2025-07-08 06:27:31,579 - ocr - INFO - Total breaks: Tier 1 (1) + Tier 2 (11) = 12
+refserver        | 2025-07-08 06:27:31,579 - ocr - INFO - Generated 44 lines → 13 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:31,579 - ocr - INFO - Paragraph breaks applied at line positions: [2, 3, 4, 5, 6, 7, 19, 20, 24, 25, 30, 31]
+refserver        | 2025-07-08 06:27:31,579 - ocr - INFO - Tesseract OCR page 7: 3003 chars, confidence: 93.6
+refserver        | 2025-07-08 06:27:31,590 - admin - INFO - Processed page 7/13
+refserver        | 2025-07-08 06:27:35,818 - ocr - INFO - Total breaks: Tier 1 (4) + Tier 2 (5) = 9
+refserver        | 2025-07-08 06:27:35,818 - ocr - INFO - Generated 44 lines → 10 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:35,818 - ocr - INFO - Paragraph breaks applied at line positions: [7, 8, 15, 16, 17, 25, 29, 30, 31]
+refserver        | 2025-07-08 06:27:35,818 - ocr - INFO - Tesseract OCR page 8: 3173 chars, confidence: 93.8
+refserver        | 2025-07-08 06:27:35,821 - admin - INFO - Processed page 8/13
+refserver        | 2025-07-08 06:27:37,941 - ocr - INFO - Total breaks: Tier 1 (0) + Tier 2 (2) = 2
+refserver        | 2025-07-08 06:27:37,941 - ocr - INFO - Generated 17 lines → 3 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:37,941 - ocr - INFO - Paragraph breaks applied at line positions: [7, 8]
+refserver        | 2025-07-08 06:27:37,941 - ocr - INFO - Tesseract OCR page 9: 1200 chars, confidence: 93.4
+refserver        | 2025-07-08 06:27:37,944 - admin - INFO - Processed page 9/13
+refserver        | 2025-07-08 06:27:41,500 - ocr - INFO - Total breaks: Tier 1 (2) + Tier 2 (34) = 36
+refserver        | 2025-07-08 06:27:41,500 - ocr - INFO - Generated 51 lines → 37 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:41,500 - ocr - INFO - Paragraph breaks applied at line positions: [0, 1, 3, 4, 5, 6, 8, 9, 11, 12, 14, 15, 17, 19, 20, 22, 23, 24, 26, 27, 28, 29, 31, 33, 34, 35, 37, 38, 40, 41, 42, 43, 44, 45, 47, 48]
+refserver        | 2025-07-08 06:27:41,500 - ocr - INFO - Tesseract OCR page 10: 3084 chars, confidence: 89.0
+refserver        | 2025-07-08 06:27:41,511 - admin - INFO - Processed page 10/13
+refserver        | 2025-07-08 06:27:43,294 - ocr - INFO - Total breaks: Tier 1 (0) + Tier 2 (13) = 13
+refserver        | 2025-07-08 06:27:43,294 - ocr - INFO - Generated 20 lines → 14 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:43,294 - ocr - INFO - Paragraph breaks applied at line positions: [0, 1, 2, 4, 5, 7, 8, 10, 11, 12, 13, 16, 17]
+refserver        | 2025-07-08 06:27:43,294 - ocr - INFO - Tesseract OCR page 11: 1218 chars, confidence: 91.8
+refserver        | 2025-07-08 06:27:43,321 - admin - INFO - Processed page 11/13
+refserver        | 2025-07-08 06:27:45,081 - ocr - INFO - Total breaks: Tier 1 (6) + Tier 2 (5) = 11
+refserver        | 2025-07-08 06:27:45,081 - ocr - INFO - Generated 21 lines → 12 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:45,081 - ocr - INFO - Paragraph breaks applied at line positions: [0, 1, 3, 4, 5, 6, 7, 10, 11, 12, 15]
+refserver        | 2025-07-08 06:27:45,081 - ocr - INFO - Tesseract OCR page 12: 1200 chars, confidence: 91.8
+refserver        | 2025-07-08 06:27:45,092 - admin - INFO - Processed page 12/13
+refserver        | 2025-07-08 06:27:45,551 - admin - INFO - Database closed: False
+refserver        | 2025-07-08 06:27:45,552 - admin - INFO - Papers page: Direct count = 1, Query count = 1
+refserver        | 2025-07-08 06:27:45,552 - admin - INFO - All papers in DB: ['7c97afe2-82be-43b1-836a-02219e0438d5']
+refserver        | 2025-07-08 06:27:45,553 - admin - INFO - Added paper 7c97afe2-82be-43b1-836a-02219e0438d5 to list
+refserver        | 2025-07-08 06:27:45,553 - admin - INFO - Final papers_list length: 1
+refserver        | INFO:     172.16.116.151:61895 - "GET /admin/papers HTTP/1.1" 200 OK
+refserver        | INFO:     172.16.116.151:61895 - "GET /admin/papers/7c97afe2-82be-43b1-836a-02219e0438d5 HTTP/1.1" 200 OK
+refserver        | 2025-07-08 06:27:50,901 - ocr - INFO - Total breaks: Tier 1 (2) + Tier 2 (0) = 2
+refserver        | 2025-07-08 06:27:50,901 - ocr - INFO - Generated 4 lines → 3 paragraphs (Tier 1+2 rules)
+refserver        | 2025-07-08 06:27:50,901 - ocr - INFO - Paragraph breaks applied at line positions: [0, 2]
+refserver        | 2025-07-08 06:27:50,901 - ocr - INFO - Tesseract OCR page 13: 81 chars, confidence: 68.4
+refserver        | 2025-07-08 06:27:50,912 - admin - INFO - Processed page 13/13
+refserver        | 2025-07-08 06:27:50,915 - admin - INFO - Page processing success rate: 84.62% (11/13)
+refserver        | 2025-07-08 06:27:50,915 - admin - INFO - Step 2: Regenerating PDF text layer with ocrmypdf...
+refserver        | 2025-07-08 06:27:50,919 - ocr - INFO - Original PDF backed up to: /refdata/pdfs/7c97afe2-82be-43b1-836a-02219e0438d5.pdf.backup_20250708_062750
+refserver        | 2025-07-08 06:27:50,919 - ocr - INFO - Regenerating PDF text layer with language: eng
+refserver        | Scanning contents     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 13/13 0:00:00
+refserver        | 2025-07-08 06:27:51,111 - ocrmypdf._pipelines.ocr - INFO - Start processing 12 pages concurrently
+refserver        | 2025-07-08 06:27:51,111 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,112 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,112 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,112 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,113 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,113 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,114 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,114 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,115 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,115 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,115 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:51,116 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:52,558 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 3.06 - no change
+refserver        | 2025-07-08 06:27:52,569 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 20.26 - rotation appears correct
+refserver        | 2025-07-08 06:27:52,592 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 19.48 - rotation appears correct
+refserver        | 2025-07-08 06:27:52,625 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 13.88 - no change
+refserver        | 2025-07-08 06:27:52,631 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 12.31 - no change
+refserver        | 2025-07-08 06:27:52,635 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 13.00 - no change
+refserver        | 2025-07-08 06:27:52,667 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 18.60 - rotation appears correct
+refserver        | 2025-07-08 06:27:52,674 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 3.75 - no change
+refserver        | 2025-07-08 06:27:52,688 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 13.58 - no change
+refserver        | 2025-07-08 06:27:52,702 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 16.26 - rotation appears correct
+refserver        | 2025-07-08 06:27:52,706 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 17.79 - rotation appears correct
+refserver        | 2025-07-08 06:27:52,723 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 17.85 - rotation appears correct
+refserver        | 2025-07-08 06:27:59,613 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:27:59,655 - ocrmypdf._pipeline - INFO - page already has text! - rasterizing text and running OCR anyway
+refserver        | 2025-07-08 06:27:59,790 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:00,209 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:01,182 - ocrmypdf._pipeline - INFO - page is facing ⇧, confidence 0.26 - no change
+refserver        | 2025-07-08 06:28:01,184 - ocrmypdf._pipeline - WARNING - Weighted average image DPI is 182.1, max DPI is 271.0. The discrepancy may indicate a high detail region on this page, but could also indicate a problem with the input PDF file. Page image will be rendered at 400.0 DPI.
+refserver        | 2025-07-08 06:28:01,194 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:01,742 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:02,229 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:02,946 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:03,505 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:03,879 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:03,940 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:04,016 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:04,128 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | 2025-07-08 06:28:11,481 - ocrmypdf._exec.tesseract - ERROR - [tesseract] read_params_file: Can't open --psm 4
+refserver        | OCR                   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 13/13 0:00:00
+refserver        | 2025-07-08 06:28:11,550 - ocrmypdf._pipelines.ocr - INFO - Postprocessing...
+refserver        | Linearizing           ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 100/100 0:00:00
+refserver        | Recompressing JPEGs   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% 0/0 -:--:--
+refserver        | Deflating JPEGs       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 7/7 0:00:00
+refserver        | JBIG2                 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% 0/0 -:--:--
+refserver        | 2025-07-08 06:28:15,718 - ocrmypdf._pipeline - INFO - Image optimization ratio: 1.02 savings: 2.4%
+refserver        | 2025-07-08 06:28:15,718 - ocrmypdf._pipeline - INFO - Total file size ratio: 0.08 savings: -1078.7%
+refserver        | 2025-07-08 06:28:18,715 - ocrmypdf._validation - WARNING - The output file size is 11.78× larger than the input file.
+refserver        | Possible reasons for this include:
+refserver        | --deskew was issued, causing transcoding.
+refserver        | --force-ocr was issued, causing transcoding.
+refserver        | The optional dependency 'jbig2' was not found, so some image optimizations could not be attempted.
+refserver        | The optional dependency 'pngquant' was not found, so some image optimizations could not be attempted.
+refserver        | 
+refserver        | 2025-07-08 06:28:18,782 - ocr - INFO - PDF text layer regenerated successfully: /refdata/pdfs/temp_ocr_7c97afe2-82be-43b1-836a-02219e0438d5.pdf
+refserver        | 2025-07-08 06:28:18,799 - admin - INFO - PDF text layer regenerated successfully for 7c97afe2-82be-43b1-836a-02219e0438d5
+refserver        | 2025-07-08 06:28:18,799 - admin - INFO - Original PDF backed up to: /refdata/pdfs/7c97afe2-82be-43b1-836a-02219e0438d5.pdf.backup_20250708_062750
+refserver        | 2025-07-08 06:28:18,800 - admin - ERROR - Error during PDF text layer regeneration: <Model: Paper> instance matching query does not exist:
+refserver        | SQL: SELECT "t1"."doc_id", "t1"."content_id", "t1"."filename", "t1"."file_path", "t1"."ocr_text", "t1"."ocr_quality", "t1"."created_at", "t1"."updated_at", "t1"."ocr_quality_completed", "t1"."layout_completed", "t1"."metadata_llm_completed", "t1"."processing_notes", "t1"."original_file_path", "t1"."ocr_regenerated" FROM "paper" AS "t1" WHERE ("t1"."doc_id" IS NULL) LIMIT ? OFFSET ?
+refserver        | Params: [1, 0]
+refserver        | 2025-07-08 06:28:18,800 - admin - INFO - Step 3: Updating document-level embedding...
+refserver        | 2025-07-08 06:28:18,808 - embedding - INFO - Text split into 7 chunks
+refserver        | 2025-07-08 06:28:34,110 - embedding - INFO - Generated averaged embedding from 7 chunks
+refserver        | 2025-07-08 06:28:34,110 - embedding - INFO - Generated embedding with shape (1024,)
+refserver        | 2025-07-08 06:28:34,132 - admin - INFO - Updated document-level embedding for 7c97afe2-82be-43b1-836a-02219e0438d5
+refserver        | 2025-07-08 06:28:34,132 - admin - INFO - Step 4: Re-extracting paper metadata from improved OCR text...
+refserver        | 2025-07-08 06:28:34,141 - ocr - INFO - Extracted formatted text from page 1
+refserver        | 2025-07-08 06:28:34,804 - ocr - INFO - Extracted formatted text from page 2
+refserver        | 2025-07-08 06:28:34,804 - admin - INFO - Using formatted text with font size information for metadata extraction
+refserver        | 2025-07-08 06:28:34,804 - admin - INFO - Metadata extraction will use 3691 chars of formatted text
+refserver        | 2025-07-08 06:28:34,804 - metadata - INFO - Starting metadata extraction with LLM
+refserver        | 2025-07-08 06:28:34,805 - metadata - INFO - Sending metadata extraction request to LLM...
+refserver        | 2025-07-08 06:28:37,148 - metadata - INFO - LLM metadata extraction completed
+refserver        | 2025-07-08 06:28:37,148 - metadata - INFO - Metadata extraction successful: 'Lemda-della Spzuy 1978' by 4 authors (1978) using structured_llm
+refserver        | 2025-07-08 06:28:37,167 - admin - INFO - Updated metadata for 7c97afe2-82be-43b1-836a-02219e0438d5 with ReOCR results
+refserver        | 2025-07-08 06:28:37,167 - admin - INFO - Extracted title: Lemda-della Spzuy 1978
+refserver        | 2025-07-08 06:28:37,167 - admin - INFO - Extracted authors: ['LiNan', 'ELapio', 'Spzuy', 'Kraus']
+refserver        | 2025-07-08 06:28:37,167 - admin - INFO - Metadata extraction used 3691 chars from first 2 pages
+refserver        | 2025-07-08 06:28:37,167 - admin - INFO - Full document OCR completed for 7c97afe2-82be-43b1-836a-02219e0438d5
+refserver        | 2025-07-08 06:28:50,815 - admin - INFO - Database closed: False
+refserver        | 2025-07-08 06:28:50,816 - admin - INFO - Papers page: Direct count = 1, Query count = 1
+refserver        | 2025-07-08 06:28:50,816 - admin - INFO - All papers in DB: ['7c97afe2-82be-43b1-836a-02219e0438d5']
+refserver        | 2025-07-08 06:28:50,817 - admin - INFO - Added paper 7c97afe2-82be-43b1-836a-02219e0438d5 to list
+refserver        | 2025-07-08 06:28:50,817 - admin - INFO - Final papers_list length: 1
+refserver        | 2025-07-08 06:28:50,818 - admin - ERROR - Error in papers page: Expecting value: line 1 column 2 (char 1)
+refserver        | Traceback (most recent call last):
+refserver        |   File "/app/admin.py", line 300, in papers_list
+refserver        |     return templates.TemplateResponse(
+refserver        |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/site-packages/starlette/templating.py", line 209, in TemplateResponse
+refserver        |     return _TemplateResponse(
+refserver        |            ^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/site-packages/starlette/templating.py", line 40, in __init__
+refserver        |     content = template.render(context)
+refserver        |               ^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/site-packages/jinja2/environment.py", line 1295, in render
+refserver        |     self.environment.handle_exception()
+refserver        |   File "/usr/local/lib/python3.11/site-packages/jinja2/environment.py", line 942, in handle_exception
+refserver        |     raise rewrite_traceback_stack(source=source)
+refserver        |   File "templates/papers.html", line 1, in top-level template code
+refserver        |     {% extends "base.html" %}
+refserver        |   File "templates/base.html", line 175, in top-level template code
+refserver        |     {% block content %}{% endblock %}
+refserver        |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "templates/papers.html", line 57, in block 'content'
+refserver        |     <td>{{ paper.metadata.get_authors_list()|join(', ') if paper.metadata else '-' }}</td>
+refserver        |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/app/models.py", line 162, in get_authors_list
+refserver        |     return json.loads(self.authors)
+refserver        |            ^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/json/__init__.py", line 346, in loads
+refserver        |     return _default_decoder.decode(s)
+refserver        |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/json/decoder.py", line 337, in decode
+refserver        |     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+refserver        |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+refserver        |   File "/usr/local/lib/python3.11/json/decoder.py", line 355, in raw_decode
+refserver        |     raise JSONDecodeError("Expecting value", s, err.value) from None
+refserver        | json.decoder.JSONDecodeError: Expecting value: line 1 column 2 (char 1)
+

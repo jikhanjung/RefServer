@@ -1,0 +1,24 @@
+(RefServer) (base) paleoadmin@paleo-server:~/projects/RefServer$ nvidia-smi
+Wed Jul  2 20:59:25 2025       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA GeForce RTX 3060 Ti     Off | 00000000:01:00.0 Off |                  N/A |
+|  0%   33C    P8               4W / 200W |   5064MiB /  8192MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|    0   N/A  N/A      3248      G   /usr/lib/xorg/Xorg                            4MiB |
+|    0   N/A  N/A   3942771      C   /app/.venv/bin/python                      1290MiB |
+|    0   N/A  N/A   3943397      C   ...unners/cuda_v11/ollama_llama_server     3758MiB |
++---------------------------------------------------------------------------------------+
+
