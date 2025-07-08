@@ -33,6 +33,11 @@ class Paper(BaseModel):
     layout_completed = BooleanField(default=False)  # Layout analysis completed
     metadata_llm_completed = BooleanField(default=False)  # LLM metadata extraction completed
     
+    # Processing notes and history
+    processing_notes = TextField(null=True)  # Notes about processing steps performed
+    original_file_path = CharField(null=True)  # Path to original PDF before OCR regeneration
+    ocr_regenerated = BooleanField(default=False)  # Whether PDF text layer was regenerated
+    
     class Meta:
         indexes = (
             (('content_id',), False),

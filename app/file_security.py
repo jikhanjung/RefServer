@@ -111,7 +111,7 @@ class FileSecurityConfig:
         self.max_uploads_per_day = int(os.getenv('MAX_UPLOADS_PER_DAY', 200))
         
         # Quarantine settings
-        self.enable_quarantine = os.getenv('ENABLE_QUARANTINE', 'true').lower() == 'true'
+        self.enable_quarantine = os.getenv('ENABLE_QUARANTINE', 'false').lower() == 'true'
         self.quarantine_dir = Path(os.getenv('QUARANTINE_DIR', '/tmp/refserver_quarantine'))
 
 

@@ -52,6 +52,24 @@ class MetadataExtractor:
         Returns:
             str: extraction prompt
         """
+        # Check if text contains font size markers
+        has_formatting = "[FONT_SIZE:" in text_content
+        
+        if has_formatting:
+            return self._create_formatted_extraction_prompt(text_content)
+        else:
+            return self._create_plain_extraction_prompt(text_content)
+    
+    def _create_plain_extraction_prompt(self, text_content: str) -> str:
+        """
+        Create prompt for metadata extraction
+        
+        Args:
+            text_content: str, paper text content
+            
+        Returns:
+            str: extraction prompt
+        """
         prompt = f"""Analyze the following academic paper text and extract bibliographic metadata. Focus on the first few pages which typically contain the title, authors, and publication information.
 
 Text content:
@@ -76,15 +94,70 @@ Please extract the following information and format as JSON:
 }}
 
 Guidelines:
-1. Extract the exact title without modifications
-2. List all authors in order of appearance
-3. For journal name, use the full official name
+1. Extract the exact title without modifications - it should be a complete, human-readable sentence or phrase, NOT page numbers, journal info, or publication details. The title typically appears after the journal header and before the authors.
+2. List all authors in order of appearance - look for names, not journal/publication info
+3. For journal name, use the full official name (e.g., "Senckenbergiana lethaea")
 4. Year should be the publication year (integer)
 5. DOI should be the complete DOI string if found
-6. Abstract should be the complete abstract text
+6. Abstract should be the complete abstract text (usually starts with "Abstract.")
 7. Keywords should be extracted from the paper or inferred from content
 8. If information is not available, use null for strings/arrays or 0 for numbers
 9. Be precise and accurate - this is bibliographic data
+
+IMPORTANT: The title is the main research topic, NOT bibliographic information like "59 | (446) | 387-399 | Frankfurt". For example:
+- CORRECT: "A trilobite from the Lower Cambrian of Córdoba (Spain) and its stratigraphical significance"
+- WRONG: "}} 59 | (446) | 387—399° | Frankfurt am Main, 18, 12. 1978"
+
+Return only the JSON object, no additional text."""
+        
+        return prompt
+    
+    def _create_formatted_extraction_prompt(self, text_content: str) -> str:
+        """
+        Create prompt for metadata extraction with font size information
+        
+        Args:
+            text_content: str, paper text content with font size markers
+            
+        Returns:
+            str: extraction prompt for formatted text
+        """
+        prompt = f"""Analyze the following academic paper text with font size information. The text includes markers like [FONT_SIZE:18] indicating the font size in points. Use these markers to identify the paper structure:
+
+- Titles typically have the LARGEST font size (often 16-24pt)
+- Authors usually have medium font size (10-14pt) and appear after the title
+- Section headers have larger fonts than body text
+- Body text is usually the smallest (8-11pt)
+
+Text content:
+{text_content[:5000]}...
+
+Please extract the following information and format as JSON:
+
+{{
+    "title": "exact paper title (look for the largest font size text that forms a complete sentence)",
+    "authors": ["First Author", "Second Author", "Third Author"],
+    "journal": "journal or conference name",
+    "year": 2024,
+    "doi": "10.xxxx/xxxxx",
+    "abstract": "paper abstract text (usually after 'Abstract' heading)",
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "volume": "volume number if available",
+    "issue": "issue number if available",
+    "pages": "page range like 123-145",
+    "publisher": "publisher name if available",
+    "institution": "primary author institution",
+    "email": "corresponding author email if available"
+}}
+
+Guidelines:
+1. The TITLE is the text with the LARGEST font size that forms a complete research statement. It's NOT journal info or page numbers.
+2. Look for the highest [FONT_SIZE:XX] marker - that's likely the title
+3. Authors typically appear right after the title with smaller font
+4. Abstract usually starts with "Abstract" or similar heading
+5. If information is not available, use null for strings/arrays or 0 for numbers
+
+IMPORTANT: Pay special attention to font sizes. The title will have the largest font size among all text elements.
 
 Return only the JSON object, no additional text."""
         
@@ -105,11 +178,13 @@ Return only the JSON object, no additional text."""
 {text_content[:2000]}
 
 Provide:
-- Title: [exact title]
-- Authors: [author names separated by semicolons]
+- Title: [exact title - the main research topic as a complete sentence, NOT page numbers or journal info]
+- Authors: [author names separated by semicolons - human names only]
 - Year: [publication year]
 - Journal: [journal/conference name]
 - Abstract: [first sentence of abstract if found]
+
+REMEMBER: The title should be the actual research topic (e.g., "A trilobite from the Lower Cambrian..."), NOT bibliographic details like page numbers or dates.
 
 Be concise and accurate."""
         
@@ -593,14 +668,35 @@ Be concise and accurate."""
     
     def _extract_title_rule_based(self, lines: List[str]) -> Optional[str]:
         """Extract title using simple rules"""
-        for i, line in enumerate(lines[:10]):  # Check first 10 lines
-            line = line.strip()
-            if len(line) > 10 and len(line) < 200:
-                # Skip common header patterns
-                if any(skip in line.lower() for skip in ['page', 'copyright', 'doi:', 'issn', 'isbn', 'vol', 'journal']):
+        # Skip initial journal header lines
+        start_idx = 0
+        for i, line in enumerate(lines[:15]):
+            line_lower = line.strip().lower()
+            # Skip lines that are clearly journal headers or page numbers
+            if any(pattern in line_lower for pattern in ['|', '—', '°', 'page', 'pp.', 'vol.', 'no.', 'issn', 'isbn', '©', 'copyright']):
+                start_idx = i + 1
+            # Found a likely title start - stop skipping
+            elif len(line.strip()) > 20 and not any(char in line for char in ['|', '—', '°']):
+                break
+        
+        # Look for title in the next lines after headers
+        for i in range(start_idx, min(start_idx + 10, len(lines))):
+            line = lines[i].strip()
+            if len(line) > 15 and len(line) < 250:
+                # Skip common non-title patterns
+                if any(skip in line.lower() for skip in ['abstract', 'keywords', 'author', 'email', '@', 'department', 'university']):
                     continue
-                # Look for title-like patterns
-                if (line.isupper() or line.istitle()) and not line.endswith('.'):
+                # Skip lines with special characters common in headers
+                if any(char in line for char in ['|', '—', '°', '©']):
+                    continue
+                # Title is likely a complete sentence or phrase
+                if len(line.split()) >= 3:  # At least 3 words
+                    # Check if next line might be continuation
+                    if i + 1 < len(lines) and lines[i + 1].strip() and not lines[i + 1].strip()[0].isupper():
+                        # Likely a continuation
+                        combined = line + " " + lines[i + 1].strip()
+                        if len(combined) < 250:
+                            return combined
                     return line
         return None
     
@@ -714,7 +810,7 @@ def get_metadata_extractor() -> MetadataExtractor:
     
     return _metadata_extractor
 
-def extract_paper_metadata(text_content: str) -> Tuple[Dict, bool]:
+def extract_paper_metadata(text_content: str, use_formatting: bool = False) -> Tuple[Dict, bool]:
     """
     Extract bibliographic metadata from paper text
     

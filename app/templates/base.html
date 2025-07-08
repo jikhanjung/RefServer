@@ -38,6 +38,7 @@
             <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
                 <div class="position-sticky pt-3">
                     <ul class="nav flex-column">
+                        <!-- Main Navigation -->
                         <li class="nav-item">
                             <a class="nav-link {% if request.url.path == '/admin' %}active{% endif %}" href="/admin">
                                 <i class="fas fa-tachometer-alt me-2"></i>Dashboard
@@ -48,39 +49,16 @@
                                 <i class="fas fa-file-pdf me-2"></i>Papers
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'metadata' in request.url.path %}active{% endif %}" href="/admin/metadata">
-                                <i class="fas fa-tags me-2"></i>Metadata
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'embeddings' in request.url.path and 'page-embeddings' not in request.url.path %}active{% endif %}" href="/admin/embeddings">
-                                <i class="fas fa-project-diagram me-2"></i>Embeddings
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'page-embeddings' in request.url.path %}active{% endif %}" href="/admin/page-embeddings">
-                                <i class="fas fa-layer-group me-2"></i>Page Embeddings
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'layout-analysis' in request.url.path %}active{% endif %}" href="/admin/layout-analysis">
-                                <i class="fas fa-th-large me-2"></i>Layout Analysis
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'change-password' in request.url.path %}active{% endif %}" href="/admin/change-password">
-                                <i class="fas fa-key me-2"></i>Change Password
-                            </a>
-                        </li>
                         
-                        <!-- v0.1.9 Monitoring Features -->
-                        <li class="nav-item">
-                            <hr class="dropdown-divider my-2">
+                        <!-- Monitoring & Performance -->
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+                                <span><i class="fas fa-chart-line me-2"></i>Monitoring</span>
+                            </h6>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'performance' in request.url.path %}active{% endif %}" href="/admin/performance">
-                                <i class="fas fa-chart-line me-2"></i>Performance
+                                <i class="fas fa-tachometer-alt me-2"></i>Performance
                             </a>
                         </li>
                         <li class="nav-item">
@@ -94,16 +72,6 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'services' in request.url.path %}active{% endif %}" href="/admin/services">
-                                <i class="fas fa-cogs me-2"></i>Service Management
-                            </a>
-                        </li>
-                        
-                        <!-- v0.1.10 Vector DB & Duplicate Prevention -->
-                        <li class="nav-item">
-                            <hr class="dropdown-divider my-2">
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link {% if 'vector-db' in request.url.path %}active{% endif %}" href="/admin/vector-db">
                                 <i class="fas fa-database me-2"></i>ChromaDB Monitor
                             </a>
@@ -114,14 +82,21 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'scheduler' in request.url.path %}active{% endif %}" href="/admin/scheduler">
-                                <i class="fas fa-clock me-2"></i>Scheduler
+                            <a class="nav-link {% if 'ocr-status' in request.url.path %}active{% endif %}" href="/admin/ocr-status">
+                                <i class="fas fa-eye me-2"></i>OCR Status
                             </a>
                         </li>
                         
-                        <!-- v0.1.12 Backup Management -->
+                        <!-- Server Management -->
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+                                <span><i class="fas fa-cogs me-2"></i>Server Management</span>
+                            </h6>
+                        </li>
                         <li class="nav-item">
-                            <hr class="dropdown-divider my-2">
+                            <a class="nav-link {% if 'services' in request.url.path %}active{% endif %}" href="/admin/services">
+                                <i class="fas fa-cogs me-2"></i>Service Management
+                            </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'backup' in request.url.path %}active{% endif %}" href="/admin/backup">
@@ -133,16 +108,36 @@
                                 <i class="fas fa-balance-scale me-2"></i>Data Consistency
                             </a>
                         </li>
-                        
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'scheduler' in request.url.path %}active{% endif %}" href="/admin/scheduler">
+                                <i class="fas fa-clock me-2"></i>Scheduler
+                            </a>
+                        </li>
                         {% if user.is_superuser %}
                         <li class="nav-item">
-                            <hr class="dropdown-divider my-2">
+                            <a class="nav-link {% if 'security' in request.url.path %}active{% endif %}" href="/admin/security">
+                                <i class="fas fa-shield-alt me-2"></i>Security Settings
+                            </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if 'database' in request.url.path %}active{% endif %}" href="/admin/database">
                                 <i class="fas fa-database me-2"></i>Database Management
                             </a>
                         </li>
+                        {% endif %}
+                        
+                        <!-- Account Management -->
+                        <li class="nav-item mt-3">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted text-uppercase">
+                                <span><i class="fas fa-user-cog me-2"></i>Account</span>
+                            </h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'change-password' in request.url.path %}active{% endif %}" href="/admin/change-password">
+                                <i class="fas fa-key me-2"></i>Change Password
+                            </a>
+                        </li>
+                        {% if user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'users' in request.url.path %}active{% endif %}" href="/admin/users">
                                 <i class="fas fa-users-cog me-2"></i>Admin Users

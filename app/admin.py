@@ -1,7 +1,7 @@
 # RefServer Admin Interface
 # Jinja2-based administration panel for managing PDF papers
 
-from fastapi import APIRouter, Request, Form, HTTPException, Depends, status
+from fastapi import APIRouter, Request, Form, HTTPException, Depends, status, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -108,6 +108,7 @@ def get_stats() -> Dict[str, Any]:
     try:
         # Use simpler counting approach to avoid SQL issues
         total_papers = Paper.select().count()
+        logger.info(f"get_stats: Total papers = {total_papers}")
         
         # Count papers with each type of data
         papers_with_metadata = 0
@@ -265,6 +266,22 @@ async def papers_list(request: Request, search: Optional[str] = None):
         else:
             papers = Paper.select().order_by(Paper.created_at.desc())
         
+        # Debug database connection
+        logger.info(f"Database closed: {db.is_closed()}")
+        if db.is_closed():
+            db.connect()
+            logger.info("Reconnected to database")
+            
+        # Count papers directly
+        direct_count = Paper.select().count()
+        query_count = papers.count()
+        
+        logger.info(f"Papers page: Direct count = {direct_count}, Query count = {query_count}")
+        
+        # List all papers for debugging
+        all_papers = list(Paper.select())
+        logger.info(f"All papers in DB: {[p.doc_id for p in all_papers]}")
+        
         # Convert to list and add metadata
         papers_list = []
         for paper in papers:
@@ -272,9 +289,13 @@ async def papers_list(request: Request, search: Optional[str] = None):
                 metadata = Metadata.get_or_none(Metadata.paper == paper)
                 paper.metadata = metadata
                 papers_list.append(paper)
-            except Exception:
+                logger.info(f"Added paper {paper.doc_id} to list")
+            except Exception as e:
+                logger.error(f"Error processing paper {paper.doc_id}: {e}")
                 paper.metadata = None
                 papers_list.append(paper)
+        
+        logger.info(f"Final papers_list length: {len(papers_list)}")
         
         return templates.TemplateResponse(
             "papers.html", 
@@ -286,6 +307,7 @@ async def papers_list(request: Request, search: Optional[str] = None):
         )
         
     except Exception as e:
+        logger.error(f"Error in papers page: {e}", exc_info=True)
         return templates.TemplateResponse(
             "papers.html", 
             {
@@ -433,101 +455,8 @@ async def change_password_post(
         )
 
 
-@router.get("/page-embeddings", response_class=HTMLResponse)
-async def page_embeddings_list(request: Request, search: Optional[str] = None):
-    """Page embeddings management page"""
-    user = require_auth(request)
-    
-    try:
-        # Get statistics
-        stats = get_stats()
-        
-        # Get all papers first, then filter those with page embeddings
-        if search:
-            papers_query = (Paper
-                          .select()
-                          .where(Paper.filename.contains(search))
-                          .order_by(Paper.created_at.desc()))
-        else:
-            papers_query = (Paper
-                          .select()
-                          .order_by(Paper.created_at.desc()))
-        
-        papers_list = []
-        total_papers_checked = 0
-        papers_with_embeddings = 0
-        
-        for paper in papers_query:
-            total_papers_checked += 1
-            # Get page embedding statistics for this paper
-            page_embs = list(PageEmbedding.select().where(PageEmbedding.paper == paper))
-            if page_embs:  # Only include papers that have page embeddings
-                papers_with_embeddings += 1
-                avg_vector_dim = page_embs[0].vector_dim  # All should be same
-                model_name = page_embs[0].model_name
-                paper.page_count = len(page_embs)
-                paper.avg_vector_dim = avg_vector_dim
-                paper.model_name = model_name
-                papers_list.append(paper)
-                logger.info(f"📄 Found paper with page embeddings: {paper.doc_id} ({paper.filename}) - {len(page_embs)} pages")
-        
-        logger.info(f"📊 Page embeddings query results: {total_papers_checked} total papers, {papers_with_embeddings} with embeddings, {len(papers_list)} in final list")
-        
-        return templates.TemplateResponse(
-            "page_embeddings.html", 
-            {
-                "request": request, 
-                "user": user, 
-                "papers": papers_list,
-                "stats": stats
-            }
-        )
-        
-    except Exception as e:
-        return templates.TemplateResponse(
-            "page_embeddings.html", 
-            {
-                "request": request, 
-                "user": user, 
-                "papers": [],
-                "stats": get_stats(),
-                "error": f"Error loading page embeddings: {str(e)}"
-            }
-        )
 
 
-@router.get("/page-embeddings/{doc_id}", response_class=HTMLResponse)
-async def page_embedding_detail(request: Request, doc_id: str):
-    """Page embedding detail page"""
-    user = require_auth(request)
-    
-    try:
-        paper = get_paper_by_id(doc_id)
-        if not paper:
-            raise HTTPException(status_code=404, detail="Paper not found")
-        
-        # Get page embeddings for this paper
-        page_embeddings = list(
-            PageEmbedding
-            .select()
-            .where(PageEmbedding.paper == paper)
-            .order_by(PageEmbedding.page_number)
-        )
-        
-        return templates.TemplateResponse(
-            "page_embedding_detail.html", 
-            {
-                "request": request, 
-                "user": user, 
-                "paper": paper,
-                "page_embeddings": page_embeddings
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading page embedding detail: {str(e)}")
 
 
 @router.get("/upload", response_class=HTMLResponse)
@@ -684,6 +613,7 @@ async def queue_management(request: Request):
                 "user": user,
                 "queue_status": queue_status,
                 "recent_jobs": recent_jobs,
+                "current_time": datetime.now(),
                 "page_title": "Job Queue Management"
             }
         )
@@ -695,6 +625,7 @@ async def queue_management(request: Request):
                 "request": request,
                 "user": user,
                 "error": f"Failed to load queue data: {str(e)}",
+                "current_time": datetime.now(),
                 "page_title": "Job Queue Management"
             }
         )
@@ -2025,6 +1956,22 @@ async def page_viewer(
         except PageEmbedding.DoesNotExist:
             page_embedding = None
         
+        # Get all page numbers for this paper for navigation
+        all_pages = list(
+            PageEmbedding
+            .select(PageEmbedding.page_number)
+            .where(PageEmbedding.paper == paper)
+            .order_by(PageEmbedding.page_number)
+        )
+        page_numbers = [p.page_number for p in all_pages]
+        
+        # Calculate navigation info
+        total_pages = len(page_numbers)
+        current_index = page_numbers.index(page_number) if page_number in page_numbers else -1
+        
+        prev_page = page_numbers[current_index - 1] if current_index > 0 else None
+        next_page = page_numbers[current_index + 1] if current_index < total_pages - 1 else None
+        
         return templates.TemplateResponse(
             "page_viewer.html",
             {
@@ -2033,6 +1980,11 @@ async def page_viewer(
                 "paper": paper,
                 "page_number": page_number,
                 "page_embedding": page_embedding,
+                "total_pages": total_pages,
+                "current_page_index": current_index + 1,  # 1-based index for display
+                "prev_page": prev_page,
+                "next_page": next_page,
+                "page_numbers": page_numbers,
                 "version": get_version()
             }
         )
@@ -2044,112 +1996,17 @@ async def page_viewer(
         raise HTTPException(status_code=500, detail=f"Failed to load page viewer: {str(e)}")
 
 
-# Layout Analysis Management
-@router.get("/layout-analysis", response_class=HTMLResponse)
-async def layout_analysis_list(request: Request, search: Optional[str] = None):
-    """Layout analysis management page"""
-    user = require_auth(request)
-    
+@router.post("/page-viewer/{doc_id}/{page_number}/re-ocr")
+async def re_ocr_page_with_tesseract(
+    doc_id: str, 
+    page_number: int,
+    user: AdminUser = Depends(require_auth)
+):
+    """Re-OCR a specific page using Tesseract"""
     try:
-        # Get statistics
-        stats = get_stats()
-        
-        # Get papers with layout analysis
-        if search:
-            papers_query = (Paper
-                          .select()
-                          .join(LayoutAnalysis, JOIN.LEFT_OUTER)
-                          .where(Paper.filename.contains(search))
-                          .order_by(Paper.created_at.desc()))
-        else:
-            papers_query = (Paper
-                          .select()
-                          .join(LayoutAnalysis, JOIN.LEFT_OUTER)
-                          .order_by(Paper.created_at.desc()))
-        
-        papers_list = []
-        for paper in papers_query:
-            # Check if paper has layout analysis
-            try:
-                layout = paper.layout.get()
-                paper.has_layout = True
-                paper.layout_page_count = layout.page_count
-                paper.layout_created = layout.created_at
-                papers_list.append(paper)
-            except LayoutAnalysis.DoesNotExist:
-                paper.has_layout = False
-                papers_list.append(paper)
-        
-        return templates.TemplateResponse(
-            "layout_analysis.html",
-            {
-                "request": request,
-                "user": user,
-                "papers": papers_list,
-                "stats": stats
-            }
-        )
-        
-    except Exception as e:
-        return templates.TemplateResponse(
-            "layout_analysis.html",
-            {
-                "request": request,
-                "user": user,
-                "papers": [],
-                "stats": get_stats(),
-                "error": f"Error loading layout analysis: {str(e)}"
-            }
-        )
-
-
-@router.get("/layout-analysis/{doc_id}", response_class=HTMLResponse)
-async def layout_analysis_detail(request: Request, doc_id: str):
-    """Layout analysis detail page"""
-    user = require_auth(request)
-    
-    try:
-        # Get paper info
-        try:
-            paper = Paper.get(Paper.doc_id == doc_id)
-        except Paper.DoesNotExist:
-            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
-        
-        # Get layout analysis
-        try:
-            layout = LayoutAnalysis.get(LayoutAnalysis.paper == paper)
-            layout_data = layout.get_layout_data()
-        except LayoutAnalysis.DoesNotExist:
-            layout = None
-            layout_data = None
-        
-        return templates.TemplateResponse(
-            "layout_analysis_detail.html",
-            {
-                "request": request,
-                "user": user,
-                "paper": paper,
-                "layout": layout,
-                "layout_data": layout_data,
-                "layout_json": json.dumps(layout_data, indent=2) if layout_data else None,
-                "version": get_version()
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to load layout analysis for {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load layout analysis: {str(e)}")
-
-
-@router.post("/layout-analysis/{doc_id}/regenerate")
-async def regenerate_layout_analysis(doc_id: str, user: AdminUser = Depends(require_auth)):
-    """Regenerate layout analysis for a specific paper"""
-    try:
-        # Only superusers can regenerate layout analysis
-        if not user.is_superuser:
-            raise HTTPException(status_code=403, detail="Superuser access required")
+        from models import Paper, PageEmbedding
+        from ocr import perform_page_ocr_with_tesseract, detect_language_hybrid, get_tesseract_language
+        import os
         
         # Get paper info
         try:
@@ -2162,36 +2019,746 @@ async def regenerate_layout_analysis(doc_id: str, user: AdminUser = Depends(requ
         if not os.path.exists(pdf_path):
             raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
         
-        logger.info(f"Regenerating layout analysis for {doc_id}")
+        logger.info(f"Re-OCR starting for {doc_id} page {page_number} using Tesseract")
         
-        # Import and run layout analysis
-        from layout import analyze_layout
+        # Detect language for better OCR results
+        try:
+            detected_lang = detect_language_hybrid(pdf_path)
+            tesseract_lang = detected_lang if detected_lang else 'eng'
+            logger.info(f"Using language {tesseract_lang} for OCR")
+        except Exception as e:
+            logger.warning(f"Language detection failed: {e}, using English")
+            tesseract_lang = 'eng'
         
-        layout_result = analyze_layout(pdf_path)
+        # Perform OCR on the specific page with paragraph detection (PSM 4)
+        extracted_text, confidence = perform_page_ocr_with_tesseract(
+            pdf_path, page_number, tesseract_lang, psm_mode=4
+        )
         
-        if layout_result:
-            # Delete existing layout analysis
-            LayoutAnalysis.delete().where(LayoutAnalysis.paper == paper).execute()
+        if not extracted_text:
+            raise HTTPException(status_code=500, detail="Tesseract OCR returned empty text")
+        
+        logger.info(f"Tesseract OCR extracted {len(extracted_text)} characters with {confidence:.1f}% confidence")
+        
+        # Get existing text for comparison
+        existing_text = ""
+        try:
+            page_embedding = PageEmbedding.get(
+                (PageEmbedding.paper == paper) & 
+                (PageEmbedding.page_number == page_number)
+            )
+            existing_text = page_embedding.page_text or ""
+        except PageEmbedding.DoesNotExist:
+            existing_text = ""
+        
+        # Generate embedding comparison if both texts exist
+        embedding_comparison = None
+        if existing_text and extracted_text:
+            try:
+                from embedding import generate_text_embedding
+                from embedding_utils import compare_embeddings
+                
+                # Generate embeddings for both texts
+                existing_embedding = generate_text_embedding(existing_text)
+                new_embedding = generate_text_embedding(extracted_text)
+                
+                if existing_embedding is not None and new_embedding is not None:
+                    embedding_comparison = compare_embeddings(
+                        existing_embedding, new_embedding,
+                        existing_text, extracted_text
+                    )
+                    logger.info(f"Embedding comparison completed - similarity: {embedding_comparison.get('embedding_comparison', {}).get('cosine_similarity', 0):.3f}")
+                else:
+                    logger.warning("Failed to generate embeddings for comparison")
+            except Exception as e:
+                logger.error(f"Failed to compare embeddings: {e}")
+        
+        logger.info(f"Tesseract re-OCR completed for {doc_id} page {page_number}, awaiting user selection")
+        
+        response = {
+            "success": True,
+            "message": "OCR completed successfully",
+            "requires_comparison": True,
+            "existing_text": existing_text,
+            "new_text": extracted_text,
+            "existing_length": len(existing_text),
+            "new_length": len(extracted_text),
+            "confidence": confidence,
+            "language": tesseract_lang,
+            "preview_existing": existing_text[:300] + "..." if len(existing_text) > 300 else existing_text,
+            "preview_new": extracted_text[:300] + "..." if len(extracted_text) > 300 else extracted_text
+        }
+        
+        # Add embedding comparison if available
+        if embedding_comparison:
+            response["embedding_comparison"] = embedding_comparison
+        
+        return response
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to re-OCR page {page_number} for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Re-OCR failed: {str(e)}")
+
+
+@router.post("/page-viewer/{doc_id}/{page_number}/apply-ocr")
+async def apply_ocr_result(
+    doc_id: str,
+    page_number: int,
+    request: Request,
+    user: AdminUser = Depends(require_auth)
+):
+    """Apply selected OCR result to page embedding with comparison"""
+    try:
+        from models import Paper, PageEmbedding
+        from embedding_utils import create_embedding_comparison_report
+        import json
+        
+        # Get request body
+        body = await request.body()
+        data = json.loads(body.decode('utf-8'))
+        
+        selected_text = data.get('selected_text', '')
+        apply_to_all = data.get('apply_to_all', False)
+        
+        if not selected_text:
+            raise HTTPException(status_code=400, detail="No text selected")
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Get existing embedding for comparison
+        old_embedding = None
+        old_text = ""
+        embedding_comparison = None
+        
+        try:
+            existing_page_embedding = PageEmbedding.get(
+                (PageEmbedding.paper == paper) & 
+                (PageEmbedding.page_number == page_number)
+            )
+            # Get existing embedding from vector_blob
+            if existing_page_embedding.vector_blob:
+                import numpy as np
+                old_embedding = np.frombuffer(existing_page_embedding.vector_blob, dtype=np.float32).tolist()
+            else:
+                old_embedding = None
+            old_text = existing_page_embedding.page_text or ""
+        except PageEmbedding.DoesNotExist:
+            pass
+        
+        # Generate new embedding for selected text
+        new_embedding = None
+        try:
+            from embedding import generate_text_embedding
+            embedding_vector = generate_text_embedding(selected_text)
+            if embedding_vector is not None:
+                new_embedding = embedding_vector.tolist()
+        except Exception as emb_error:
+            logger.warning(f"Failed to generate new embedding: {emb_error}")
+        
+        # Compare embeddings if both exist
+        if old_embedding and new_embedding:
+            embedding_comparison = create_embedding_comparison_report(
+                old_embedding, new_embedding, old_text, selected_text
+            )
+            logger.info(f"Embedding comparison: {embedding_comparison.get('overall_assessment', 'unknown')}")
+        
+        # Update or create page embedding
+        try:
+            page_embedding = PageEmbedding.get(
+                (PageEmbedding.paper == paper) & 
+                (PageEmbedding.page_number == page_number)
+            )
+            # Update existing embedding
+            page_embedding.page_text = selected_text
+            if new_embedding:
+                import numpy as np
+                # Convert to numpy array and store as blob
+                vector_array = np.array(new_embedding, dtype=np.float32)
+                page_embedding.vector_blob = vector_array.tobytes()
+                page_embedding.vector_dim = len(new_embedding)
+            page_embedding.save()
+            logger.info(f"Updated page embedding for page {page_number}")
             
-            # Save new layout analysis
-            from db import save_layout_analysis
-            save_layout_analysis(doc_id, layout_result)
+        except PageEmbedding.DoesNotExist:
+            # Create new page embedding
+            try:
+                from embedding import generate_text_embedding
+                embedding_vector = generate_text_embedding(selected_text)
+                if embedding_vector is not None:
+                    import numpy as np
+                    vector_array = np.array(embedding_vector, dtype=np.float32)
+                    PageEmbedding.create(
+                        paper=paper,
+                        page_number=page_number,
+                        page_text=selected_text,
+                        vector_blob=vector_array.tobytes(),
+                        vector_dim=len(embedding_vector),
+                        model_name='bge-m3'
+                    )
+                else:
+                    PageEmbedding.create(
+                        paper=paper,
+                        page_number=page_number,
+                        page_text=selected_text,
+                        vector_blob=None,
+                        vector_dim=0,
+                        model_name='tesseract-ocr'
+                    )
+                logger.info(f"Created new page embedding for page {page_number}")
+            except Exception as emb_error:
+                logger.warning(f"Failed to generate embedding: {emb_error}")
+                PageEmbedding.create(
+                    paper=paper,
+                    page_number=page_number,
+                    page_text=selected_text,
+                    vector_blob=None,
+                    vector_dim=0,
+                    model_name='tesseract-ocr'
+                )
+        
+        result = {
+            "success": True,
+            "message": "Text updated successfully",
+            "text_length": len(selected_text),
+            "embedding_comparison": embedding_comparison
+        }
+        
+        # If user wants to apply to entire document
+        if apply_to_all:
+            result["full_document_ocr_required"] = True
             
-            logger.info(f"Layout analysis regenerated successfully for {doc_id}")
-            
-            return {
-                "success": True,
-                "message": "Layout analysis regenerated successfully",
-                "page_count": layout_result.get('page_count', 0)
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Layout analysis failed")
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to regenerate layout analysis for {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Layout analysis regeneration failed: {str(e)}")
+        logger.error(f"Failed to apply OCR result for {doc_id} page {page_number}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to apply OCR result: {str(e)}")
+
+
+@router.post("/papers/{doc_id}/full-ocr")
+async def full_document_ocr(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    user: AdminUser = Depends(require_auth)
+):
+    """Re-OCR entire document with Tesseract"""
+    try:
+        from models import Paper, PageEmbedding
+        from ocr import process_pdf_with_ocr, detect_language_hybrid
+        import os
+        import asyncio
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        pdf_path = paper.file_path
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {pdf_path}")
+        
+        logger.info(f"Starting full document re-OCR for {doc_id}")
+        
+        # Create processing job for status tracking
+        from models import ProcessingJob
+        import uuid
+        
+        processing_job = ProcessingJob.create(
+            job_id=str(uuid.uuid4()),
+            paper=paper,
+            filename=os.path.basename(pdf_path),
+            status='processing',
+            current_step='Starting full document ReOCR'
+        )
+        
+        # Start background task using FastAPI BackgroundTasks
+        background_tasks.add_task(process_full_document_ocr_task, paper, processing_job)
+        
+        return {
+            "success": True,
+            "message": "Full document OCR started in background",
+            "doc_id": doc_id,
+            "job_id": processing_job.job_id,
+            "status": "processing"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start full document OCR for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start full document OCR: {str(e)}")
+
+
+def process_full_document_ocr_task(paper, processing_job=None):
+    """Background task for full document OCR processing with PDF text layer regeneration"""
+    try:
+        # Ensure database connection for background task
+        if db.is_closed():
+            db.connect()
+            logger.info("Database connection opened for background task")
+        
+        if processing_job:
+            processing_job.started_at = datetime.now()
+            processing_job.save()
+        from ocr import (extract_page_texts_from_pdf, perform_page_ocr_with_tesseract, 
+                        detect_language_hybrid, regenerate_pdf_text_layer)
+        from models import PageEmbedding
+        from embedding import generate_text_embedding
+        import os
+        import tempfile
+        
+        pdf_path = paper.file_path
+        logger.info(f"Processing full document OCR for {paper.doc_id}")
+        logger.info(f"PDF path: {pdf_path}")
+        
+        # Verify PDF file exists
+        if not os.path.exists(pdf_path):
+            logger.error(f"PDF file not found at {pdf_path} for paper {paper.doc_id}")
+            raise Exception(f"PDF file not found: {pdf_path}")
+        
+        # Update progress
+        if processing_job:
+            processing_job.current_step = 'Detecting language'
+            processing_job.progress_percentage = 5
+            processing_job.save()
+        
+        # Detect language
+        tesseract_lang = detect_language_hybrid(pdf_path)
+        logger.info(f"Detected language: {tesseract_lang} for full document OCR")
+        
+        # Get total pages
+        page_texts, total_pages = extract_page_texts_from_pdf(pdf_path)
+        
+        # Step 1: Process individual pages for database updates
+        logger.info("Step 1: Processing individual pages...")
+        if processing_job:
+            processing_job.current_step = f'Processing pages (0/{total_pages})'
+            processing_job.progress_percentage = 10
+            processing_job.save()
+        
+        successful_pages = 0
+        
+        for page_num in range(1, total_pages + 1):
+            try:
+                # Perform OCR on each page
+                extracted_text, confidence = perform_page_ocr_with_tesseract(
+                    pdf_path, page_num, tesseract_lang
+                )
+                
+                if extracted_text:
+                    # Update or create page embedding
+                    try:
+                        page_embedding = PageEmbedding.get(
+                            (PageEmbedding.paper == paper) & 
+                            (PageEmbedding.page_number == page_num)
+                        )
+                        page_embedding.page_text = extracted_text
+                        page_embedding.save()
+                    except PageEmbedding.DoesNotExist:
+                        # Generate embedding
+                        try:
+                            embedding_vector = generate_text_embedding(extracted_text)
+                            if embedding_vector is not None:
+                                import numpy as np
+                                vector_array = np.array(embedding_vector, dtype=np.float32)
+                                PageEmbedding.create(
+                                    paper=paper,
+                                    page_number=page_num,
+                                    page_text=extracted_text,
+                                    vector_blob=vector_array.tobytes(),
+                                    vector_dim=len(embedding_vector),
+                                    model_name='bge-m3'
+                                )
+                            else:
+                                PageEmbedding.create(
+                                    paper=paper,
+                                    page_number=page_num,
+                                    page_text=extracted_text,
+                                    vector_blob=None,
+                                    vector_dim=0,
+                                    model_name='tesseract-ocr'
+                                )
+                        except Exception as emb_error:
+                            logger.warning(f"Failed to generate embedding for page {page_num}: {emb_error}")
+                            PageEmbedding.create(
+                                paper=paper,
+                                page_number=page_num,
+                                page_text=extracted_text,
+                                vector_blob=None,
+                                vector_dim=0,
+                                model_name='tesseract-ocr'
+                            )
+                    
+                    successful_pages += 1
+                    logger.info(f"Processed page {page_num}/{total_pages}")
+                    
+                    # Update progress
+                    if processing_job:
+                        progress = 10 + (page_num / total_pages) * 50  # Pages take 50% of progress (10-60%)
+                        processing_job.current_step = f'Processing pages ({page_num}/{total_pages})'
+                        processing_job.progress_percentage = int(progress)
+                        processing_job.save()
+                    
+            except Exception as page_error:
+                logger.error(f"Error processing page {page_num}: {page_error}")
+                continue
+        
+        # Step 2: Regenerate PDF text layer if most pages were successful
+        success_rate = successful_pages / total_pages if total_pages > 0 else 0
+        logger.info(f"Page processing success rate: {success_rate:.2%} ({successful_pages}/{total_pages})")
+        
+        if success_rate >= 0.7:  # If 70% or more pages were successful
+            logger.info("Step 2: Regenerating PDF text layer with ocrmypdf...")
+            if processing_job:
+                processing_job.current_step = 'Regenerating PDF text layer'
+                processing_job.progress_percentage = 65
+                processing_job.save()
+            
+            # Create temporary path for new PDF
+            pdf_dir = os.path.dirname(pdf_path)
+            pdf_filename = os.path.basename(pdf_path)
+            temp_pdf_path = os.path.join(pdf_dir, f"temp_ocr_{pdf_filename}")
+            
+            try:
+                # Regenerate PDF text layer
+                result = regenerate_pdf_text_layer(
+                    input_pdf_path=pdf_path,
+                    output_pdf_path=temp_pdf_path,
+                    language=tesseract_lang,
+                    backup_original=True
+                )
+                
+                if result['success']:
+                    # Replace original PDF with new one
+                    import shutil
+                    shutil.move(temp_pdf_path, pdf_path)
+                    
+                    logger.info(f"PDF text layer regenerated successfully for {paper.doc_id}")
+                    logger.info(f"Original PDF backed up to: {result['backup_path']}")
+                    
+                    # Refresh paper object from database to avoid stale data
+                    paper = Paper.get_by_id(paper.id)
+                    
+                    # Update paper record to indicate text layer was regenerated
+                    paper.processing_notes = (paper.processing_notes or '') + f"\nText layer regenerated with Tesseract ({tesseract_lang}) on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    paper.original_file_path = result['backup_path']
+                    paper.ocr_regenerated = True
+                    paper.save()
+                    logger.info(f"Paper record updated for {paper.doc_id}")
+                    
+                else:
+                    logger.error(f"Failed to regenerate PDF text layer: {result['error']}")
+                    
+            except Exception as pdf_error:
+                logger.error(f"Error during PDF text layer regeneration: {pdf_error}")
+                # Clean up temp file if it exists
+                if os.path.exists(temp_pdf_path):
+                    os.unlink(temp_pdf_path)
+        else:
+            logger.warning(f"Skipping PDF text layer regeneration due to low success rate: {success_rate:.2%}")
+        
+        # Step 3: Update document-level embedding with combined text from all pages
+        logger.info("Step 3: Updating document-level embedding...")
+        if processing_job:
+            processing_job.current_step = 'Updating document embedding'
+            processing_job.progress_percentage = 80
+            processing_job.save()
+        try:
+            from models import Embedding
+            from embedding import generate_text_embedding
+            
+            # Collect all page texts
+            page_embeddings = PageEmbedding.select().where(
+                PageEmbedding.paper == paper
+            ).order_by(PageEmbedding.page_number)
+            
+            combined_text = ""
+            first_pages_text = ""  # For metadata extraction
+            for i, page_emb in enumerate(page_embeddings):
+                if page_emb.page_text:
+                    combined_text += page_emb.page_text + "\n\n"
+                    # Collect first 2 pages for metadata extraction
+                    if i < 2:
+                        first_pages_text += page_emb.page_text + "\n\n"
+            
+            if combined_text.strip():
+                # Generate document-level embedding
+                doc_embedding_vector = generate_text_embedding(combined_text.strip())
+                
+                if doc_embedding_vector is not None:
+                    import numpy as np
+                    vector_array = np.array(doc_embedding_vector, dtype=np.float32)
+                    
+                    # Update or create document embedding
+                    try:
+                        doc_embedding = Embedding.get(Embedding.paper == paper)
+                        doc_embedding.vector_blob = vector_array.tobytes()
+                        doc_embedding.vector_dim = len(doc_embedding_vector)
+                        doc_embedding.model_name = 'bge-m3'
+                        doc_embedding.updated_at = datetime.now()
+                        doc_embedding.save()
+                        logger.info(f"Updated document-level embedding for {paper.doc_id}")
+                    except Embedding.DoesNotExist:
+                        Embedding.create(
+                            paper=paper,
+                            vector_blob=vector_array.tobytes(),
+                            vector_dim=len(doc_embedding_vector),
+                            model_name='bge-m3'
+                        )
+                        logger.info(f"Created new document-level embedding for {paper.doc_id}")
+                else:
+                    logger.warning(f"Failed to generate document-level embedding for {paper.doc_id}")
+            else:
+                logger.warning(f"No text available for document-level embedding for {paper.doc_id}")
+                
+        except Exception as emb_error:
+            logger.error(f"Failed to update document-level embedding for {paper.doc_id}: {emb_error}")
+        
+        # Step 4: Re-extract metadata from improved OCR text
+        logger.info("Step 4: Re-extracting paper metadata from improved OCR text...")
+        if processing_job:
+            processing_job.current_step = 'Re-extracting metadata'
+            processing_job.progress_percentage = 90
+            processing_job.save()
+        try:
+            from metadata import extract_paper_metadata
+            from models import Metadata
+            from ocr import extract_first_pages_with_formatting
+            
+            # Try to get formatted text with font sizes first
+            formatted_text = None
+            try:
+                formatted_text = extract_first_pages_with_formatting(pdf_path, num_pages=2)
+                if formatted_text:
+                    logger.info("Using formatted text with font size information for metadata extraction")
+            except Exception as fmt_error:
+                logger.warning(f"Failed to extract formatted text: {fmt_error}")
+            
+            # Use formatted text if available, otherwise use plain text
+            if formatted_text and formatted_text.strip():
+                metadata_text = formatted_text
+                logger.info(f"Metadata extraction will use {len(metadata_text)} chars of formatted text")
+            else:
+                # Fallback to plain text from first pages
+                metadata_text = first_pages_text.strip() if first_pages_text.strip() else combined_text.strip()
+                logger.info(f"Metadata extraction will use {len(metadata_text)} chars of plain text")
+            
+            if metadata_text:
+                # Extract metadata using the formatted or plain text
+                metadata_info, success = extract_paper_metadata(metadata_text)
+                
+                if success and metadata_info:
+                    
+                    # Update or create metadata record
+                    try:
+                        metadata_record = Metadata.get(Metadata.paper == paper)
+                        
+                        # Update with new extracted information
+                        if metadata_info.get('title'):
+                            metadata_record.title = metadata_info['title']
+                        if metadata_info.get('authors'):
+                            metadata_record.authors = metadata_info['authors']
+                        if metadata_info.get('abstract'):
+                            metadata_record.abstract = metadata_info['abstract']
+                        if metadata_info.get('keywords'):
+                            metadata_record.keywords = metadata_info['keywords']
+                        if metadata_info.get('doi'):
+                            metadata_record.doi = metadata_info['doi']
+                        if metadata_info.get('journal'):
+                            metadata_record.journal = metadata_info['journal']
+                        if metadata_info.get('year'):
+                            metadata_record.year = metadata_info['year']
+                        if metadata_info.get('volume'):
+                            metadata_record.volume = metadata_info['volume']
+                        if metadata_info.get('issue'):
+                            metadata_record.issue = metadata_info['issue']
+                        if metadata_info.get('pages'):
+                            metadata_record.pages = metadata_info['pages']
+                        
+                        # Update extraction info
+                        metadata_record.extraction_method = 'tesseract_reocr'
+                        metadata_record.confidence_score = metadata_info.get('confidence_score', 0.8)  # Default confidence for ReOCR
+                        metadata_record.updated_at = datetime.now()
+                        metadata_record.save()
+                        
+                        logger.info(f"Updated metadata for {paper.doc_id} with ReOCR results")
+                        logger.info(f"Extracted title: {metadata_info.get('title', 'N/A')[:100]}")
+                        logger.info(f"Extracted authors: {metadata_info.get('authors', 'N/A')[:100]}")
+                        logger.info(f"Metadata extraction used {len(metadata_text)} chars from {'first 2 pages' if first_pages_text.strip() else 'all pages'}")
+                        
+                    except Metadata.DoesNotExist:
+                        # Create new metadata record
+                        Metadata.create(
+                            paper=paper,
+                            title=metadata_info.get('title', ''),
+                            authors=metadata_info.get('authors', ''),
+                            abstract=metadata_info.get('abstract', ''),
+                            keywords=metadata_info.get('keywords', ''),
+                            doi=metadata_info.get('doi', ''),
+                            journal=metadata_info.get('journal', ''),
+                            year=metadata_info.get('year'),
+                            volume=metadata_info.get('volume', ''),
+                            issue=metadata_info.get('issue', ''),
+                            pages=metadata_info.get('pages', ''),
+                            extraction_method='tesseract_reocr',
+                            confidence_score=metadata_info.get('confidence_score', 0.8)  # Default confidence for ReOCR
+                        )
+                        logger.info(f"Created new metadata for {paper.doc_id} with ReOCR results")
+                else:
+                    logger.warning(f"Failed to extract metadata from ReOCR text for {paper.doc_id}")
+                    logger.info(f"Metadata extraction used {len(metadata_text)} chars from {'first pages' if first_pages_text.strip() else 'all pages'}")
+            else:
+                logger.warning(f"No text available for metadata extraction for {paper.doc_id}")
+                
+        except Exception as meta_error:
+            logger.error(f"Failed to re-extract metadata for {paper.doc_id}: {meta_error}")
+        
+        logger.info(f"Full document OCR completed for {paper.doc_id}")
+        
+        # Mark job as completed
+        if processing_job:
+            processing_job.status = 'completed'
+            processing_job.current_step = 'Completed'
+            processing_job.progress_percentage = 100
+            processing_job.completed_at = datetime.now()
+            processing_job.add_completed_step('full_document_ocr', {
+                'pages_processed': successful_pages,
+                'total_pages': total_pages,
+                'success_rate': f"{success_rate:.2%}"
+            })
+            processing_job.save()
+        
+    except Exception as e:
+        logger.error(f"Full document OCR task failed for {paper.doc_id}: {e}")
+        
+        # Mark job as failed
+        if processing_job:
+            processing_job.status = 'failed'
+            processing_job.current_step = 'Failed'
+            processing_job.error_message = str(e)
+            processing_job.completed_at = datetime.now()
+            processing_job.add_failed_step('full_document_ocr', str(e))
+            processing_job.save()
+
+
+@router.get("/ocr-status", response_class=HTMLResponse)
+async def admin_ocr_status(
+    request: Request,
+    user: AdminUser = Depends(require_auth)
+):
+    """OCR processing status dashboard"""
+    try:
+        from models import Paper, PageEmbedding
+        from peewee import fn
+        
+        # Get papers with processing notes
+        papers_with_notes = (Paper
+                           .select()
+                           .where(Paper.processing_notes.is_null(False))
+                           .order_by(Paper.updated_at.desc())
+                           .limit(20))
+        
+        # Get OCR completion statistics
+        total_papers = Paper.select().count()
+        papers_with_text_layer = (Paper
+                                .select()
+                                .where(Paper.processing_notes.contains('Text layer regenerated'))
+                                .count())
+        
+        # Get recent OCR activities
+        recent_activities = []
+        for paper in papers_with_notes:
+            if paper.processing_notes:
+                lines = paper.processing_notes.strip().split('\n')
+                for line in lines:
+                    if 'Text layer regenerated' in line:
+                        recent_activities.append({
+                            'paper': paper,
+                            'activity': line.strip(),
+                            'timestamp': paper.updated_at
+                        })
+        
+        # Sort by timestamp
+        recent_activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        recent_activities = recent_activities[:10]
+        
+        # Get page-level OCR statistics
+        page_stats = (PageEmbedding
+                     .select(PageEmbedding.model_name, fn.COUNT(PageEmbedding.id).alias('count'))
+                     .group_by(PageEmbedding.model_name))
+        
+        ocr_stats = {
+            'total_papers': total_papers,
+            'papers_with_regenerated_text_layer': papers_with_text_layer,
+            'regeneration_percentage': (papers_with_text_layer / total_papers * 100) if total_papers > 0 else 0,
+            'page_model_distribution': {stat.model_name: stat.count for stat in page_stats}
+        }
+        
+        return templates.TemplateResponse(
+            "ocr_status.html",
+            {
+                "request": request,
+                "user": user,
+                "papers_with_notes": list(papers_with_notes),
+                "recent_activities": recent_activities,
+                "ocr_stats": ocr_stats,
+                "version": get_version()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to load OCR status dashboard: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load OCR status: {str(e)}")
+
+
+@router.get("/download-original/{doc_id}")
+async def download_original_pdf(
+    doc_id: str,
+    user: AdminUser = Depends(require_auth)
+):
+    """Download original PDF before OCR regeneration"""
+    try:
+        from models import Paper
+        from fastapi.responses import FileResponse
+        import os
+        
+        # Get paper info
+        try:
+            paper = Paper.get(Paper.doc_id == doc_id)
+        except Paper.DoesNotExist:
+            raise HTTPException(status_code=404, detail=f"Paper not found: {doc_id}")
+        
+        # Check if original file exists
+        if not paper.original_file_path:
+            raise HTTPException(status_code=404, detail="No original file backup available")
+        
+        if not os.path.exists(paper.original_file_path):
+            raise HTTPException(status_code=404, detail="Original file not found on disk")
+        
+        # Return file
+        return FileResponse(
+            paper.original_file_path,
+            media_type='application/pdf',
+            filename=f"original_{paper.filename}"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download original PDF for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download original PDF: {str(e)}")
+
+
+
+
 
 
 # Pending GPU Tasks Management

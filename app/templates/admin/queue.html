@@ -329,7 +329,7 @@
                                         {% set duration = (job.completed_at - job.started_at).total_seconds() %}
                                         {{ (duration / 60)|round(1) }}m
                                     {% elif job.started_at %}
-                                        {% set duration = (moment().naive - job.started_at).total_seconds() %}
+                                        {% set duration = (current_time - job.started_at).total_seconds() %}
                                         {{ (duration / 60)|round(1) }}m
                                     {% else %}
                                         <span class="text-muted">-</span>

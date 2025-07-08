@@ -8,6 +8,7 @@ import ocrmypdf
 from pathlib import Path
 import langdetect
 from langdetect.lang_detect_exception import LangDetectException
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,14 @@ def extract_text_from_pdf(pdf_path):
         
         for page_num in range(page_count):
             page = doc[page_num]
-            text = page.get_text()
-            text_content += text + "\n"
+            # Use blocks to preserve better line structure
+            blocks = page.get_text("blocks")
+            page_text = ""
+            for block in blocks:
+                # Block format: (x0, y0, x1, y1, "text", block_no, block_type)
+                if len(block) > 4 and isinstance(block[4], str):
+                    page_text += block[4] + "\n"
+            text_content += page_text + "\n"
         
         doc.close()
         
@@ -75,8 +82,14 @@ def extract_page_texts_from_pdf(pdf_path):
         
         for page_num in range(page_count):
             page = doc[page_num]
-            text = page.get_text()
-            page_texts.append(text.strip())
+            # Use blocks to preserve better line structure
+            blocks = page.get_text("blocks")
+            page_text = ""
+            for block in blocks:
+                # Block format: (x0, y0, x1, y1, "text", block_no, block_type)
+                if len(block) > 4 and isinstance(block[4], str):
+                    page_text += block[4] + "\n"
+            page_texts.append(page_text.strip())
         
         doc.close()
         
@@ -86,6 +99,101 @@ def extract_page_texts_from_pdf(pdf_path):
     except Exception as e:
         logger.error(f"Error extracting page texts from PDF: {e}")
         return [], 0
+
+
+def extract_page_text_with_formatting(pdf_path, page_number=1):
+    """
+    Extract text from a specific page with font size information
+    
+    Args:
+        pdf_path: str, path to PDF file
+        page_number: int, page number (1-indexed)
+    
+    Returns:
+        str: formatted text with font size markers
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        if page_number < 1 or page_number > len(doc):
+            logger.error(f"Invalid page number {page_number}")
+            return ""
+            
+        page = doc[page_number - 1]  # Convert to 0-indexed
+        
+        # Extract text with detailed formatting
+        text_dict = page.get_text("dict")
+        
+        formatted_text = ""
+        previous_font_size = None
+        
+        # Process blocks
+        for block in text_dict.get("blocks", []):
+            if block.get("type") == 0:  # Text block
+                for line in block.get("lines", []):
+                    line_text = ""
+                    line_font_sizes = []
+                    
+                    for span in line.get("spans", []):
+                        text = span.get("text", "")
+                        font_size = round(span.get("size", 0))
+                        font_name = span.get("font", "")
+                        flags = span.get("flags", 0)
+                        
+                        # Check if bold (flag bit 16)
+                        is_bold = bool(flags & 2**16)
+                        
+                        if text.strip():
+                            line_text += text
+                            line_font_sizes.append(font_size)
+                    
+                    if line_text.strip():
+                        # Calculate average font size for the line
+                        avg_font_size = sum(line_font_sizes) / len(line_font_sizes) if line_font_sizes else 0
+                        avg_font_size = round(avg_font_size)
+                        
+                        # Add font size marker if it changed significantly
+                        if previous_font_size is None or abs(avg_font_size - previous_font_size) > 2:
+                            formatted_text += f"\n[FONT_SIZE:{avg_font_size}]\n"
+                            previous_font_size = avg_font_size
+                        
+                        formatted_text += line_text.strip() + "\n"
+        
+        doc.close()
+        
+        logger.info(f"Extracted formatted text from page {page_number}")
+        return formatted_text.strip()
+        
+    except Exception as e:
+        logger.error(f"Error extracting formatted text from PDF: {e}")
+        return ""
+
+
+def extract_first_pages_with_formatting(pdf_path, num_pages=2):
+    """
+    Extract text from first N pages with font size information for metadata extraction
+    
+    Args:
+        pdf_path: str, path to PDF file
+        num_pages: int, number of pages to extract (default: 2)
+    
+    Returns:
+        str: combined formatted text from first pages
+    """
+    try:
+        combined_text = ""
+        
+        for page_num in range(1, num_pages + 1):
+            page_text = extract_page_text_with_formatting(pdf_path, page_num)
+            if page_text:
+                combined_text += f"\n[PAGE {page_num}]\n{page_text}\n"
+            else:
+                break  # Stop if we can't extract a page
+        
+        return combined_text.strip()
+        
+    except Exception as e:
+        logger.error(f"Error extracting formatted pages: {e}")
+        return ""
 
 def detect_language(text, min_confidence=0.7):
     """
@@ -539,7 +647,8 @@ def perform_ocr(input_pdf_path, output_pdf_path, language='eng', force_ocr=False
             'deskew': True,
             'clean': True,
             'clean_final': True,
-            'unpaper_args': '--layout double --pre-rotate 90',
+            'unpaper_args': '--layout double',
+            'tesseract_config': ['--psm', '4'],  # Single column with paragraphs
         }
         
         # Perform OCR
@@ -566,6 +675,535 @@ def perform_ocr(input_pdf_path, output_pdf_path, language='eng', force_ocr=False
         except Exception as copy_error:
             logger.error(f"Failed to copy original PDF: {copy_error}")
         return False
+
+def regenerate_pdf_text_layer(input_pdf_path, output_pdf_path, language='eng', backup_original=True):
+    """
+    Regenerate PDF text layer using ocrmypdf with force OCR
+    
+    Args:
+        input_pdf_path: str, path to input PDF
+        output_pdf_path: str, path to output PDF with new text layer
+        language: str, Tesseract language parameter
+        backup_original: bool, whether to backup original PDF
+    
+    Returns:
+        dict: Processing results with success status and details
+    """
+    try:
+        import shutil
+        
+        # Backup original if requested
+        backup_path = None
+        if backup_original:
+            backup_path = f"{input_pdf_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(input_pdf_path, backup_path)
+            logger.info(f"Original PDF backed up to: {backup_path}")
+        
+        logger.info(f"Regenerating PDF text layer with language: {language}")
+        
+        # OCR parameters for text layer regeneration
+        ocr_options = {
+            'language': language,
+            'output_type': 'pdf',
+            'pdf_renderer': 'hocr',
+            'force_ocr': True,  # Force OCR even if text already exists
+            'optimize': 1,
+            'jpeg_quality': 95,
+            'png_quality': 95,
+            'deskew': True,
+            'clean': False,
+            'clean_final': False,
+            'remove_background': False,  # Preserve original appearance
+            'rotate_pages': True,
+            'skip_text': False,  # Include text layer
+            'tesseract_config': ['--psm 4']  # Single column with paragraphs
+        }
+        
+        # Perform OCR with text layer regeneration
+        ocrmypdf.ocr(
+            input_pdf_path,
+            output_pdf_path,
+            **ocr_options
+        )
+        
+        logger.info(f"PDF text layer regenerated successfully: {output_pdf_path}")
+        
+        return {
+            'success': True,
+            'output_path': output_pdf_path,
+            'backup_path': backup_path,
+            'language': language,
+            'message': 'PDF text layer regenerated successfully'
+        }
+        
+    except ocrmypdf.exceptions.ExitCodeException as e:
+        logger.error(f"ocrmypdf failed with exit code: {e}")
+        return {
+            'success': False,
+            'error': f"OCR processing failed: {str(e)}",
+            'backup_path': backup_path
+        }
+        
+    except Exception as e:
+        logger.error(f"PDF text layer regeneration failed: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'backup_path': backup_path
+        }
+
+def perform_page_ocr_with_tesseract(pdf_path, page_number, language='eng', psm_mode=4):
+    """
+    Perform OCR on a specific page using Tesseract with paragraph detection
+    
+    Args:
+        pdf_path: str, path to PDF file
+        page_number: int, page number (1-based)
+        language: str, Tesseract language parameter
+        psm_mode: int, Page Segmentation Mode (4 = single column with paragraphs)
+    
+    Returns:
+        tuple: (extracted_text, confidence_score)
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+        
+        # Convert specific page to image
+        images = convert_from_path(
+            pdf_path,
+            first_page=page_number,
+            last_page=page_number,
+            dpi=300,  # High DPI for better OCR
+            fmt='PNG'
+        )
+        
+        if not images:
+            logger.error(f"No images generated for page {page_number}")
+            return "", 0
+        
+        image = images[0]
+        
+        # Configure Tesseract with PSM for better paragraph detection
+        custom_config = f'--psm {psm_mode} --oem 3'
+        
+        # Get text with detailed data including coordinates
+        data = pytesseract.image_to_data(
+            image,
+            lang=language,
+            config=custom_config,
+            output_type=pytesseract.Output.DICT
+        )
+        
+        # Process text with paragraph detection
+        extracted_text, avg_confidence = process_ocr_data_with_paragraphs(data)
+        
+        logger.info(f"Tesseract OCR page {page_number}: {len(extracted_text)} chars, confidence: {avg_confidence:.1f}")
+        return extracted_text, avg_confidence
+        
+    except ImportError:
+        logger.error("pytesseract not available for page OCR")
+        return "", 0
+    except Exception as e:
+        logger.error(f"Error in page OCR with Tesseract: {e}")
+        return "", 0
+
+
+def process_ocr_data_with_paragraphs(data, line_threshold=None, paragraph_threshold=None, conservative_mode=False):
+    """
+    Process Tesseract OCR data with progressive paragraph detection rules
+    
+    Args:
+        data: dict, Tesseract output from image_to_data
+        line_threshold: int, vertical distance to consider new line (optional)
+        paragraph_threshold: int, vertical distance to consider new paragraph (optional)
+        conservative_mode: bool, if True only apply Tier 1 rules, if False apply Tier 1+2
+    
+    Returns:
+        tuple: (formatted_text, average_confidence)
+    """
+    try:
+        mode_text = "Tier 1 only" if conservative_mode else "Tier 1+2"
+        logger.debug(f"Processing OCR data with {len(data['text'])} text elements using {mode_text} rules")
+        
+        # Calculate font-aware adaptive thresholds
+        thresholds, avg_font_height = calculate_font_aware_thresholds(data)
+        
+        # Override with user-provided values if specified
+        if line_threshold:
+            thresholds['line_gap'] = line_threshold
+        if paragraph_threshold:
+            thresholds['large_para_gap'] = paragraph_threshold
+        
+        logger.debug(f"Font-aware thresholds: line_gap={thresholds['line_gap']:.1f}, large_para_gap={thresholds['large_para_gap']:.1f}, avg_font_height={avg_font_height:.1f}")
+        
+        # Structure lines from OCR data
+        lines = structure_lines_from_ocr_data(data, thresholds)
+        logger.debug(f"Structured {len(lines)} lines from OCR data")
+        
+        # Apply progressive paragraph detection rules
+        paragraph_breaks = detect_paragraph_breaks_progressive(lines, thresholds, apply_tier2=not conservative_mode)
+        
+        # Build paragraphs
+        paragraphs = build_paragraphs(lines, paragraph_breaks)
+        logger.debug(f"Built {len(paragraphs)} paragraphs")
+        
+        # Join paragraphs with double newlines
+        formatted_text = '\n\n'.join(paragraphs)
+        
+        # Calculate average confidence
+        confidences = [data['conf'][i] for i in range(len(data['text'])) 
+                      if data['text'][i].strip() and data['conf'][i] > 0]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+        
+        logger.info(f"Generated {len(lines)} lines → {len(paragraphs)} paragraphs ({mode_text} rules)")
+        if paragraph_breaks:
+            logger.info(f"Paragraph breaks applied at line positions: {paragraph_breaks}")
+        
+        return formatted_text, avg_confidence
+        
+    except Exception as e:
+        logger.error(f"Error processing OCR data with Tier 1 rules: {e}")
+        # Fallback to simple word joining
+        try:
+            words = []
+            for i in range(len(data['text'])):
+                word = data['text'][i].strip()
+                if word:
+                    words.append(word)
+            return ' '.join(words), 0
+        except:
+            return "", 0
+
+
+def calculate_font_aware_thresholds(data):
+    """
+    Calculate font-aware adaptive thresholds based on OCR character statistics
+    
+    Args:
+        data: dict, Tesseract output from image_to_data
+    
+    Returns:
+        tuple: (thresholds_dict, avg_font_height)
+    """
+    try:
+        # 1. Collect character heights and confidences (improved filtering)
+        heights = []
+        confidences = []
+        
+        for i in range(len(data['text'])):
+            if data['text'][i].strip() and data['conf'][i] > 50:  # Only high-confidence text
+                heights.append(data['height'][i])
+                confidences.append(data['conf'][i])
+        
+        if not heights:
+            # Fallback to default values
+            logger.warning("No valid character heights found, using fallback thresholds")
+            return {
+                'tiny_gap': 6, 'line_gap': 16, 'small_para_gap': 30,
+                'medium_para_gap': 40, 'large_para_gap': 60, 'section_gap': 80,
+                'avg_char_width': 12, 'avg_font_height': 20
+            }, 20
+        
+        # 2. Calculate weighted average (confidence-based)
+        weighted_heights = [h * c for h, c in zip(heights, confidences)]
+        avg_font_height = sum(weighted_heights) / sum(confidences)
+        
+        # 3. Remove outliers (beyond 2 standard deviations)
+        import numpy as np
+        height_std = np.std(heights)
+        filtered_heights = [h for h in heights if abs(h - avg_font_height) < 2 * height_std]
+        avg_font_height = np.mean(filtered_heights) if filtered_heights else avg_font_height
+        
+        # 4. Calculate hierarchical thresholds
+        thresholds = {
+            'tiny_gap': avg_font_height * 0.3,      # Word spacing
+            'line_gap': avg_font_height * 0.8,      # Normal line break
+            'small_para_gap': avg_font_height * 1.5, # Weak paragraph break
+            'medium_para_gap': avg_font_height * 2.0, # Medium paragraph break
+            'large_para_gap': avg_font_height * 2.5,  # Strong paragraph break (Tier 1)
+            'section_gap': avg_font_height * 4.0,    # Section break
+            'avg_char_width': avg_font_height * 0.6,  # Estimated character width
+            'avg_font_height': avg_font_height        # Reference font height
+        }
+        
+        logger.debug(f"Font analysis: avg_height={avg_font_height:.1f}, samples={len(filtered_heights)}")
+        
+        return thresholds, avg_font_height
+        
+    except Exception as e:
+        logger.error(f"Error calculating font-aware thresholds: {e}")
+        # Return safe defaults
+        return {
+            'tiny_gap': 6, 'line_gap': 16, 'small_para_gap': 30,
+            'medium_para_gap': 40, 'large_para_gap': 60, 'section_gap': 80,
+            'avg_char_width': 12, 'avg_font_height': 20
+        }, 20
+
+
+def structure_lines_from_ocr_data(data, thresholds):
+    """
+    Structure OCR data into lines with position information
+    
+    Args:
+        data: dict, Tesseract output from image_to_data
+        thresholds: dict, calculated thresholds
+    
+    Returns:
+        list: List of line dictionaries with text, y, x, width info
+    """
+    lines = []
+    current_line = []
+    current_y = None
+    current_x_start = None
+    current_x_end = None
+    
+    for i in range(len(data['text'])):
+        word = data['text'][i].strip()
+        if not word:
+            continue
+            
+        x = data['left'][i]
+        y = data['top'][i]
+        width = data['width'][i]
+        height = data['height'][i]
+        
+        # Detect line breaks based on Y coordinate
+        if current_y is None:
+            current_y = y
+            current_x_start = x
+            current_x_end = x + width
+        elif abs(y - current_y) > thresholds['line_gap']:
+            # New line detected
+            if current_line:
+                lines.append({
+                    'text': ' '.join(current_line),
+                    'y': current_y,
+                    'x': current_x_start,
+                    'width': current_x_end - current_x_start
+                })
+            current_line = [word]
+            current_y = y
+            current_x_start = x
+            current_x_end = x + width
+        else:
+            current_line.append(word)
+            current_x_end = max(current_x_end, x + width)
+    
+    # Add last line
+    if current_line:
+        lines.append({
+            'text': ' '.join(current_line),
+            'y': current_y,
+            'x': current_x_start,
+            'width': current_x_end - current_x_start
+        })
+    
+    return lines
+
+
+def is_section_header(text):
+    """
+    Detect academic paper section headers
+    
+    Args:
+        text: str, text to check
+    
+    Returns:
+        bool: True if text appears to be a section header
+    """
+    section_keywords = [
+        'abstract', 'introduction', 'method', 'methods', 'result', 'results',
+        'discussion', 'conclusion', 'conclusions', 'references', 'bibliography',
+        'resumen', 'kurzfassung', 'zusammenfassung', 'keywords', 'acknowledgments'
+    ]
+    text_lower = text.lower().strip()
+    return any(keyword in text_lower for keyword in section_keywords)
+
+
+def starts_with_number_or_bullet(text):
+    """
+    Check if text starts with numbering or bullet point
+    
+    Args:
+        text: str, text to check
+    
+    Returns:
+        bool: True if text starts with number/bullet
+    """
+    import re
+    patterns = [
+        r'^\d+\.?\s',           # "1. " or "1 "
+        r'^\(\d+\)',           # "(1)"
+        r'^[a-zA-Z]\.?\s',     # "a. " or "A "
+        r'^[-•*▪▫○●]\s',       # bullet points
+        r'^[IVX]+\.?\s'        # Roman numerals "I.", "II."
+    ]
+    return any(re.match(pattern, text) for pattern in patterns)
+
+
+def apply_tier1_rules(lines, thresholds):
+    """
+    Apply Tier 1 paragraph detection rules (95%+ confidence)
+    
+    Args:
+        lines: list, structured line data
+        thresholds: dict, calculated thresholds
+    
+    Returns:
+        list: Indices where paragraph breaks should occur
+    """
+    breaks = []
+    
+    for i in range(len(lines) - 1):
+        current_line = lines[i]
+        next_line = lines[i + 1]
+        gap = next_line['y'] - current_line['y']
+        
+        # Rule 1: Large vertical gap (absolute certainty)
+        if gap > thresholds['large_para_gap']:
+            breaks.append(i)
+            logger.debug(f"Tier 1 Rule 1 (large gap): break at line {i} (gap={gap:.1f})")
+            continue
+            
+        # Rule 2: Section headers (100% certainty)
+        if is_section_header(current_line['text']) or is_section_header(next_line['text']):
+            breaks.append(i)
+            logger.debug(f"Tier 1 Rule 2 (section header): break at line {i}")
+            continue
+            
+        # Rule 3: Numbered/bulleted lists (100% certainty)
+        if starts_with_number_or_bullet(next_line['text']):
+            breaks.append(i)
+            logger.debug(f"Tier 1 Rule 3 (numbered list): break at line {i}")
+            continue
+    
+    return breaks
+
+
+def apply_tier2_rules(lines, thresholds, existing_breaks):
+    """
+    Apply Tier 2 paragraph detection rules (80-90% confidence)
+    
+    Args:
+        lines: list, structured line data
+        thresholds: dict, calculated thresholds
+        existing_breaks: set, already identified break points
+    
+    Returns:
+        list: Additional indices where paragraph breaks should occur
+    """
+    additional_breaks = []
+    
+    for i in range(len(lines) - 1):
+        if i in existing_breaks:  # Skip already identified breaks
+            continue
+            
+        current_line = lines[i]
+        next_line = lines[i + 1]
+        gap = next_line['y'] - current_line['y']
+        
+        # Rule 4: Indentation change (high confidence)
+        indent_change = abs(current_line['x'] - next_line['x'])
+        if (gap > thresholds['line_gap'] and 
+            indent_change > thresholds['avg_char_width'] * 3):
+            additional_breaks.append(i)
+            logger.debug(f"Tier 2 Rule 4 (indentation): break at line {i} (gap={gap:.1f}, indent_change={indent_change:.1f})")
+            continue
+            
+        # Rule 5: Triple condition (short line + period + capital start)
+        if (gap > thresholds['small_para_gap'] and
+            is_short_line(current_line, thresholds) and
+            current_line['text'].rstrip().endswith('.') and
+            next_line['text'] and len(next_line['text']) > 0 and next_line['text'][0].isupper()):
+            additional_breaks.append(i)
+            logger.debug(f"Tier 2 Rule 5 (triple condition): break at line {i}")
+            continue
+    
+    return additional_breaks
+
+
+def is_short_line(line, thresholds):
+    """
+    Determine if a line is considered short
+    
+    Args:
+        line: dict, line data with text and width info
+        thresholds: dict, calculated thresholds
+    
+    Returns:
+        bool: True if line is considered short
+    """
+    # Method 1: Use width if available
+    if 'width' in line and line['width'] > 0:
+        # Estimate average line width from font height
+        estimated_avg_width = thresholds['avg_font_height'] * 25  # Rough estimate: 25 chars per line
+        return line['width'] < estimated_avg_width * 0.7
+    
+    # Method 2: Use text length as fallback
+    text_length = len(line['text'])
+    return text_length < 50  # Less than 50 characters is considered short
+
+
+def detect_paragraph_breaks_progressive(lines, thresholds, apply_tier2=True):
+    """
+    Apply paragraph detection rules progressively by tier
+    
+    Args:
+        lines: list, structured line data
+        thresholds: dict, calculated thresholds
+        apply_tier2: bool, whether to apply Tier 2 rules
+    
+    Returns:
+        list: All paragraph break indices sorted
+    """
+    # Phase 1: Apply Tier 1 rules (highest confidence)
+    tier1_breaks = apply_tier1_rules(lines, thresholds)
+    logger.debug(f"Tier 1 found {len(tier1_breaks)} breaks: {tier1_breaks}")
+    
+    all_breaks = set(tier1_breaks)
+    
+    # Phase 2: Apply Tier 2 rules if enabled
+    if apply_tier2:
+        tier2_breaks = apply_tier2_rules(lines, thresholds, all_breaks)
+        all_breaks.update(tier2_breaks)
+        logger.debug(f"Tier 2 found {len(tier2_breaks)} additional breaks: {tier2_breaks}")
+        logger.info(f"Total breaks: Tier 1 ({len(tier1_breaks)}) + Tier 2 ({len(tier2_breaks)}) = {len(all_breaks)}")
+    else:
+        logger.info(f"Only Tier 1 applied: {len(tier1_breaks)} breaks found")
+    
+    return sorted(list(all_breaks))
+
+
+def build_paragraphs(lines, paragraph_breaks):
+    """
+    Assemble lines into paragraphs based on break points
+    
+    Args:
+        lines: list, structured line data
+        paragraph_breaks: list, indices where paragraphs should break
+    
+    Returns:
+        list: List of paragraph texts
+    """
+    paragraphs = []
+    start = 0
+    
+    for break_point in paragraph_breaks:
+        paragraph_lines = lines[start:break_point + 1]
+        paragraph_text = '\n'.join([line['text'] for line in paragraph_lines])
+        if paragraph_text.strip():
+            paragraphs.append(paragraph_text.strip())
+        start = break_point + 1
+    
+    # Add last paragraph
+    if start < len(lines):
+        paragraph_lines = lines[start:]
+        paragraph_text = '\n'.join([line['text'] for line in paragraph_lines])
+        if paragraph_text.strip():
+            paragraphs.append(paragraph_text.strip())
+    
+    return paragraphs
 
 def extract_first_page_image(pdf_path, output_path, dpi=150):
     """

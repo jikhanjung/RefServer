@@ -4,16 +4,58 @@
 {% block header %}Page Viewer{% endblock %}
 
 {% block actions %}
-<div class="btn-group" role="group">
-    <a href="/admin/page-embeddings/{{ paper.doc_id }}" class="btn btn-secondary">
-        <i class="fas fa-arrow-left me-2"></i>Back to Embeddings
-    </a>
-    <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-info">
-        <i class="fas fa-file-alt me-2"></i>View Paper
-    </a>
-    <button type="button" class="btn btn-outline-primary" onclick="downloadPageImage()">
-        <i class="fas fa-download me-2"></i>Download Image
-    </button>
+<div class="d-flex gap-2">
+    <!-- Navigation -->
+    <div class="btn-group" role="group">
+        {% if prev_page %}
+        <a href="/admin/page-viewer/{{ paper.doc_id }}/{{ prev_page }}" 
+           class="btn btn-outline-secondary" 
+           title="Previous page">
+            <i class="fas fa-chevron-left"></i>
+        </a>
+        {% else %}
+        <button class="btn btn-outline-secondary" disabled>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        {% endif %}
+        
+        <button type="button" class="btn btn-outline-info" id="page-dropdown" data-bs-toggle="dropdown">
+            {{ current_page_index }} / {{ total_pages }}
+            <i class="fas fa-caret-down ms-1"></i>
+        </button>
+        <ul class="dropdown-menu" style="max-height: 200px; overflow-y: auto;">
+            {% for page_num in page_numbers %}
+            <li>
+                <a class="dropdown-item {% if page_num == page_number %}active{% endif %}" 
+                   href="/admin/page-viewer/{{ paper.doc_id }}/{{ page_num }}">
+                    Page {{ page_num }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        
+        {% if next_page %}
+        <a href="/admin/page-viewer/{{ paper.doc_id }}/{{ next_page }}" 
+           class="btn btn-outline-secondary" 
+           title="Next page">
+            <i class="fas fa-chevron-right"></i>
+        </a>
+        {% else %}
+        <button class="btn btn-outline-secondary" disabled>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        {% endif %}
+    </div>
+    
+    <!-- Other Actions -->
+    <div class="btn-group" role="group">
+        <a href="/admin/papers/{{ paper.doc_id }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Paper
+        </a>
+        <button type="button" class="btn btn-outline-primary" onclick="downloadPageImage()">
+            <i class="fas fa-download me-2"></i>Download Image
+        </button>
+    </div>
 </div>
 {% endblock %}
 
@@ -30,7 +72,7 @@
                         </h5>
                         <p class="card-text text-muted mb-0">
                             <strong>Document ID:</strong> <code>{{ paper.doc_id }}</code> | 
-                            <strong>Page:</strong> {{ page_number }}
+                            <strong>Page:</strong> {{ current_page_index }} of {{ total_pages }}
                             {% if page_embedding %}
                             | <strong>Text Length:</strong> {{ page_embedding.page_text|length if page_embedding.page_text else 0 }} chars
                             {% endif %}
@@ -136,6 +178,9 @@
                     <button class="btn btn-outline-success" onclick="downloadText()">
                         <i class="fas fa-download me-2"></i>Download as TXT
                     </button>
+                    <button class="btn btn-outline-warning" onclick="reOcrWithTesseract()" id="re-ocr-btn" title="Enhanced OCR with paragraph detection">
+                        <i class="fas fa-magic me-2"></i>Re-OCR with Tesseract
+                    </button>
                 </div>
                 
                 {% else %}
@@ -149,6 +194,9 @@
                         This page has not been processed for text extraction yet.
                         {% endif %}
                     </p>
+                    <button class="btn btn-warning mt-3" onclick="reOcrWithTesseract()" id="re-ocr-btn" title="Enhanced OCR with paragraph detection">
+                        <i class="fas fa-magic me-2"></i>Extract Text with Tesseract
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -167,6 +215,142 @@
     <i class="fas fa-check-circle me-2"></i>
     <span id="success-text"></span>
 </div>
+
+<!-- OCR Comparison Modal -->
+<div class="modal fade" id="ocrComparisonModal" tabindex="-1" aria-labelledby="ocrComparisonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ocrComparisonModalLabel">
+                    <i class="fas fa-balance-scale me-2"></i>OCR Results Comparison
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Compare the existing text with the new OCR result and choose which one to keep.
+                </div>
+                
+                <div class="row">
+                    <!-- Existing Text -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-file-text me-2"></i>Existing Text
+                                    <span class="badge bg-light text-dark ms-2" id="existing-char-count">0 chars</span>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="textChoice" id="keepExisting" value="existing">
+                                    <label class="form-check-label fw-bold" for="keepExisting">
+                                        Keep Existing Text
+                                    </label>
+                                </div>
+                                <div class="border rounded p-3" style="background-color: #f8f9fa; height: 300px; overflow-y: auto;">
+                                    <pre class="mb-0" id="existing-text-content" style="white-space: pre-wrap; font-size: 0.85em; line-height: 1.4;"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- New OCR Text -->
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-magic me-2"></i>New OCR Result
+                                    <span class="badge bg-light text-dark ms-2" id="new-char-count">0 chars</span>
+                                    <span class="badge bg-warning text-dark ms-1" id="ocr-confidence">0% confidence</span>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="textChoice" id="useNew" value="new" checked>
+                                    <label class="form-check-label fw-bold" for="useNew">
+                                        Use New OCR Text
+                                    </label>
+                                </div>
+                                <div class="border rounded p-3" style="background-color: #f8f9fa; height: 300px; overflow-y: auto;">
+                                    <pre class="mb-0" id="new-text-content" style="white-space: pre-wrap; font-size: 0.85em; line-height: 1.4;"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Embedding Comparison Results -->
+                <div class="row mt-3" id="embedding-comparison-results" style="display: none;">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-chart-line me-2"></i>Embedding Comparison Results
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="embedding-comparison-display">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Full Document OCR Option -->
+                <div class="row mt-3" id="full-document-option" style="display: none;">
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="applyToAllPages">
+                                <label class="form-check-label fw-bold" for="applyToAllPages">
+                                    <i class="fas fa-file-pdf me-2"></i>Apply Tesseract OCR to entire document
+                                </label>
+                            </div>
+                            <small class="text-muted mt-1 d-block">
+                                This will re-process all pages in the document with Tesseract OCR and regenerate the PDF's text layer using ocrmypdf. This may take several minutes.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="applySelectedText()">
+                    <i class="fas fa-check me-2"></i>Apply Selection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Embedding Comparison Results Modal -->
+<div class="modal fade" id="embeddingComparisonModal" tabindex="-1" aria-labelledby="embeddingComparisonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="embeddingComparisonModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Embedding Comparison Results
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="embedding-comparison-content">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="proceed-full-ocr-btn" style="display: none;" onclick="proceedWithFullOcr()">
+                    <i class="fas fa-file-pdf me-2"></i>Proceed with Full Document OCR
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <style>
 #page-image {
@@ -347,6 +531,505 @@ function downloadPageImage() {
     showSuccess('Page image download started');
 }
 
+function reOcrWithTesseract() {
+    const btn = document.getElementById('re-ocr-btn');
+    const originalText = btn.innerHTML;
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+    
+    // Show progress messages
+    let progressStep = 0;
+    const progressMessages = [
+        'Converting PDF to image...',
+        'Running Tesseract OCR with paragraph detection...',
+        'Processing text layout and paragraphs...',
+        'Updating database...'
+    ];
+    
+    const progressInterval = setInterval(() => {
+        if (progressStep < progressMessages.length) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>' + progressMessages[progressStep];
+            progressStep++;
+        }
+    }, 5000); // Update every 5 seconds (faster than LLaVA)
+    
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute (faster than LLaVA)
+    
+    fetch('/admin/page-viewer/{{ paper.doc_id }}/{{ page_number }}/re-ocr', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getCookie('access_token')
+        },
+        credentials: 'include',
+        signal: controller.signal
+    })
+    .then(response => {
+        clearTimeout(timeoutId); // Clear timeout if response received
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.detail || 'OCR failed');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        clearTimeout(timeoutId); // Clear timeout on success
+        clearInterval(progressInterval); // Clear progress updates
+        
+        if (data.requires_comparison) {
+            // Show comparison modal
+            showOcrComparison(data);
+        } else {
+            showSuccess('OCR completed successfully! Refreshing page...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        clearTimeout(timeoutId); // Clear timeout on error
+        clearInterval(progressInterval); // Clear progress updates
+        
+        if (error.name === 'AbortError') {
+            showError('OCR request timed out after 1 minute. Please try again.');
+        } else {
+            showError('OCR failed: ' + error.message);
+        }
+        
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+// Global variables for OCR comparison
+let ocrComparisonData = null;
+
+function showOcrComparison(data) {
+    ocrComparisonData = data;
+    
+    // Populate modal with comparison data
+    document.getElementById('existing-text-content').textContent = data.existing_text || 'No existing text';
+    document.getElementById('new-text-content').textContent = data.new_text || 'No new text';
+    
+    // Update character counts
+    document.getElementById('existing-char-count').textContent = `${data.existing_length} chars`;
+    document.getElementById('new-char-count').textContent = `${data.new_length} chars`;
+    document.getElementById('ocr-confidence').textContent = `${data.confidence.toFixed(1)}% confidence`;
+    
+    // Show embedding comparison results if available
+    if (data.embedding_comparison) {
+        displayEmbeddingComparison(data.embedding_comparison);
+        document.getElementById('embedding-comparison-results').style.display = 'block';
+    } else {
+        document.getElementById('embedding-comparison-results').style.display = 'none';
+    }
+    
+    // Show full document option if new text is selected
+    const newRadio = document.getElementById('useNew');
+    const existingRadio = document.getElementById('keepExisting');
+    const fullDocOption = document.getElementById('full-document-option');
+    
+    // Show initially if new text is already selected
+    if (newRadio.checked) {
+        fullDocOption.style.display = 'block';
+    }
+    
+    newRadio.addEventListener('change', function() {
+        if (this.checked) {
+            fullDocOption.style.display = 'block';
+        }
+    });
+    
+    existingRadio.addEventListener('change', function() {
+        if (this.checked) {
+            fullDocOption.style.display = 'none';
+            // Uncheck the apply to all checkbox when switching to existing
+            document.getElementById('applyToAllPages').checked = false;
+        }
+    });
+    
+    // Reset button state
+    const btn = document.getElementById('re-ocr-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic me-2"></i>Re-OCR with Tesseract';
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('ocrComparisonModal'));
+    modal.show();
+}
+
+function applySelectedText() {
+    if (!ocrComparisonData) {
+        showError('No OCR data available');
+        return;
+    }
+    
+    const selectedChoice = document.querySelector('input[name="textChoice"]:checked').value;
+    const applyToAll = document.getElementById('applyToAllPages').checked;
+    
+    let selectedText = '';
+    if (selectedChoice === 'existing') {
+        selectedText = ocrComparisonData.existing_text;
+    } else {
+        selectedText = ocrComparisonData.new_text;
+    }
+    
+    // Apply the selected text
+    fetch('/admin/page-viewer/{{ paper.doc_id }}/{{ page_number }}/apply-ocr', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getCookie('access_token')
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+            selected_text: selectedText,
+            apply_to_all: applyToAll
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.detail || 'Failed to apply OCR result');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Close comparison modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('ocrComparisonModal'));
+        modal.hide();
+        
+        // Show embedding comparison results if available
+        if (data.embedding_comparison) {
+            showEmbeddingComparison(data.embedding_comparison, applyToAll && selectedChoice === 'new');
+        } else if (applyToAll && selectedChoice === 'new') {
+            // Start full document OCR
+            startFullDocumentOcr();
+        } else {
+            showSuccess('Text updated successfully! Refreshing page...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        showError('Failed to apply selection: ' + error.message);
+    });
+}
+
+function showEmbeddingComparison(comparison, showFullOcrButton = false) {
+    const content = document.getElementById('embedding-comparison-content');
+    
+    let html = '';
+    
+    // Overall assessment
+    if (comparison.overall_assessment) {
+        const assessmentColors = {
+            'minimal_change': 'info',
+            'minor_improvement': 'success',
+            'significant_improvement': 'primary',
+            'quality_degraded': 'danger',
+            'changed': 'warning',
+            'embedding_unavailable': 'secondary'
+        };
+        
+        const assessmentTexts = {
+            'minimal_change': 'Minimal Change',
+            'minor_improvement': 'Minor Improvement',
+            'significant_improvement': 'Significant Improvement',
+            'quality_degraded': 'Quality Degraded',
+            'changed': 'Changed',
+            'embedding_unavailable': 'Embedding Unavailable'
+        };
+        
+        html += `
+            <div class="alert alert-${assessmentColors[comparison.overall_assessment] || 'secondary'}">
+                <h6><i class="fas fa-chart-line me-2"></i>Overall Assessment: ${assessmentTexts[comparison.overall_assessment] || comparison.overall_assessment}</h6>
+                <p class="mb-0">${comparison.recommendation || ''}</p>
+            </div>
+        `;
+    }
+    
+    // Embedding comparison metrics
+    if (comparison.embedding_comparison) {
+        const ec = comparison.embedding_comparison;
+        html += `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-vector-square me-2"></i>Embedding Similarity
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="fw-bold">Cosine Similarity:</label>
+                                <div class="progress">
+                                    <div class="progress-bar ${ec.cosine_similarity > 0.9 ? 'bg-success' : ec.cosine_similarity > 0.7 ? 'bg-warning' : 'bg-danger'}" 
+                                         style="width: ${ec.similarity_score}%">
+                                        ${ec.similarity_score.toFixed(1)}%
+                                    </div>
+                                </div>
+                                <small class="text-muted">Higher is more similar (100% = identical)</small>
+                            </div>
+                            
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <small class="text-muted">Euclidean Distance</small>
+                                    <br><strong>${ec.euclidean_distance.toFixed(3)}</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Magnitude Change</small>
+                                    <br><strong>${ec.magnitude_change_percent.toFixed(1)}%</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-chart-bar me-2"></i>Element-wise Differences
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Maximum Difference:</td>
+                                    <td><strong>${ec.max_element_diff.toFixed(4)}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Mean Difference:</td>
+                                    <td><strong>${ec.mean_element_diff.toFixed(4)}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Std Dev Difference:</td>
+                                    <td><strong>${ec.std_element_diff.toFixed(4)}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Significant Change:</td>
+                                    <td>
+                                        <span class="badge bg-${ec.is_significant_change ? 'warning' : 'success'}">
+                                            ${ec.is_significant_change ? 'Yes' : 'No'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Text analysis
+    if (comparison.text_analysis) {
+        const ta = comparison.text_analysis;
+        html += `
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-file-alt me-2"></i>Text Quality Analysis
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6>Character Count</h6>
+                            <p>Old: ${ta.old_char_count}<br>
+                               New: ${ta.new_char_count}<br>
+                               Change: <span class="${ta.char_diff > 0 ? 'text-success' : ta.char_diff < 0 ? 'text-danger' : ''}">
+                                   ${ta.char_diff > 0 ? '+' : ''}${ta.char_diff} (${ta.char_change_percent.toFixed(1)}%)
+                               </span>
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>Word Count</h6>
+                            <p>Old: ${ta.old_word_count}<br>
+                               New: ${ta.new_word_count}<br>
+                               Change: <span class="${ta.word_diff > 0 ? 'text-success' : ta.word_diff < 0 ? 'text-danger' : ''}">
+                                   ${ta.word_diff > 0 ? '+' : ''}${ta.word_diff} (${ta.word_change_percent.toFixed(1)}%)
+                               </span>
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>Quality Score</h6>
+                            <div class="text-center">
+                                <h3 class="${ta.quality_score >= 70 ? 'text-success' : ta.quality_score >= 40 ? 'text-warning' : 'text-danger'}">
+                                    ${ta.quality_score}/100
+                                </h3>
+                                <span class="badge bg-${ta.quality_assessment === 'improved' ? 'success' : ta.quality_assessment === 'similar' ? 'info' : 'warning'}">
+                                    ${ta.quality_assessment.toUpperCase()}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    content.innerHTML = html;
+    
+    // Show/hide full OCR button
+    const fullOcrBtn = document.getElementById('proceed-full-ocr-btn');
+    if (showFullOcrButton) {
+        fullOcrBtn.style.display = 'block';
+    } else {
+        fullOcrBtn.style.display = 'none';
+    }
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('embeddingComparisonModal'));
+    modal.show();
+}
+
+function displayEmbeddingComparison(comparison) {
+    const content = document.getElementById('embedding-comparison-display');
+    
+    let html = '';
+    
+    // Overall assessment
+    if (comparison.overall_assessment) {
+        const assessmentColors = {
+            'minimal_change': 'info',
+            'minor_improvement': 'success',
+            'significant_improvement': 'primary',
+            'quality_degraded': 'danger',
+            'changed': 'warning',
+            'embedding_unavailable': 'secondary'
+        };
+        
+        const assessmentTexts = {
+            'minimal_change': 'Minimal Change',
+            'minor_improvement': 'Minor Improvement',
+            'significant_improvement': 'Significant Improvement',
+            'quality_degraded': 'Quality Degraded',
+            'changed': 'Changed',
+            'embedding_unavailable': 'Embedding Unavailable'
+        };
+        
+        html += `
+            <div class="alert alert-${assessmentColors[comparison.overall_assessment] || 'secondary'} mb-3">
+                <h6><i class="fas fa-chart-line me-2"></i>Overall Assessment: ${assessmentTexts[comparison.overall_assessment] || comparison.overall_assessment}</h6>
+                <p class="mb-0">${comparison.recommendation || ''}</p>
+            </div>
+        `;
+    }
+    
+    // Embedding comparison metrics
+    if (comparison.embedding_comparison) {
+        const ec = comparison.embedding_comparison;
+        html += `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label class="fw-bold">Cosine Similarity:</label>
+                        <div class="progress mb-2">
+                            <div class="progress-bar ${ec.cosine_similarity > 0.9 ? 'bg-success' : ec.cosine_similarity > 0.7 ? 'bg-warning' : 'bg-danger'}" 
+                                 style="width: ${(ec.cosine_similarity * 100).toFixed(1)}%">
+                                ${(ec.cosine_similarity * 100).toFixed(1)}%
+                            </div>
+                        </div>
+                        <small class="text-muted">Higher is more similar (100% = identical)</small>
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <small class="text-muted">Euclidean Distance</small>
+                            <br><strong>${ec.euclidean_distance.toFixed(3)}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Magnitude Change</small>
+                            <br><strong>${ec.magnitude_change_percent.toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Text comparison metrics
+    if (comparison.text_comparison) {
+        const tc = comparison.text_comparison;
+        html += `
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6><i class="fas fa-text-width me-2"></i>Text Comparison</h6>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <small class="text-muted">Length Change</small>
+                            <br><strong>${tc.length_change}%</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Word Count Change</small>
+                            <br><strong>${tc.word_count_change}%</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Similarity</small>
+                            <br><strong>${tc.text_similarity.toFixed(1)}%</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    content.innerHTML = html;
+}
+
+function proceedWithFullOcr() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('embeddingComparisonModal'));
+    modal.hide();
+    startFullDocumentOcr();
+}
+
+function startFullDocumentOcr() {
+    showSuccess('Starting full document OCR in background...');
+    
+    fetch('/admin/papers/{{ paper.doc_id }}/full-ocr', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getCookie('access_token')
+        },
+        credentials: 'include'
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.detail || 'Failed to start full document OCR');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        showSuccess('Full document OCR with PDF text layer regeneration started in background. This may take several minutes. You can check progress in the Papers list.');
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    })
+    .catch(error => {
+        showError('Failed to start full document OCR: ' + error.message);
+    });
+}
+
 // Allow click on image to zoom (after image loads)
 window.addEventListener('DOMContentLoaded', function() {
     const img = document.getElementById('page-image');
@@ -357,6 +1040,7 @@ window.addEventListener('DOMContentLoaded', function() {
             resetZoom();
         }
     });
+    
 });
 </script>
 {% endblock %}
