@@ -6,7 +6,7 @@
 # 
 # This configuration disables GPU-dependent services:
 # - LLaVA (OCR quality assessment) - requires GPU for image processing
-# - Huridocs (Layout analysis) - GPU accelerated
+# - Huridocs (Layout analysis) - disabled by default (can be enabled by uncommenting)
 #
 # Core functionality that works on CPU:
 # - PDF OCR processing (Tesseract)
@@ -28,7 +28,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434  # Use external Ollama for Llama 3.2 metadata extraction
-      - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Enable Huridocs layout analysis for testing
+      - HURIDOCS_LAYOUT_URL=disabled  # Disabled by default - uncomment huridocs-layout service below to enable
       - ENABLE_GPU_INTENSIVE_TASKS=false  # Skip GPU tasks in CPU mode
       - LLAVA_ENABLED=false  # Disable LLaVA OCR quality assessment (GPU required)
       - CPU_ONLY_MODE=true
@@ -38,26 +38,28 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
-    depends_on:
-      - huridocs-layout
+    # depends_on:
+    #   - huridocs-layout  # Commented out since Huridocs is disabled by default
 
-  huridocs-layout:
-    image: huridocs/pdf-document-layout-analysis:1.8.8
-    container_name: huridocs-layout
-    ports:
-      - "8061:5060"
-    environment:
-      - WORKERS=1  # Reduce workers to save memory
-      - TIMEOUT=600
-      - WORKER_CLASS=sync
-      - WORKER_CONNECTIONS=1
-      - MAX_REQUESTS=100
-      - MAX_REQUESTS_JITTER=10
-      - PRELOAD_APP=true
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G  # Set memory limit
-        reservations:
-          memory: 2G  # Reserve minimum memory
+  # huridocs-layout:
+  #   # Uncomment this service if you want to enable Huridocs layout analysis
+  #   # and change HURIDOCS_LAYOUT_URL to http://huridocs-layout:5060
+  #   image: huridocs/pdf-document-layout-analysis:1.8.8
+  #   container_name: huridocs-layout
+  #   ports:
+  #     - "8061:5060"
+  #   environment:
+  #     - WORKERS=1  # Reduce workers to save memory
+  #     - TIMEOUT=600
+  #     - WORKER_CLASS=sync
+  #     - WORKER_CONNECTIONS=1
+  #     - MAX_REQUESTS=100
+  #     - MAX_REQUESTS_JITTER=10
+  #     - PRELOAD_APP=true
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 4G  # Set memory limit
+  #       reservations:
+  #         memory: 2G  # Reserve minimum memory

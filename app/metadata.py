@@ -107,6 +107,8 @@ Guidelines:
 IMPORTANT: The title is the main research topic, NOT bibliographic information like "59 | (446) | 387-399 | Frankfurt". For example:
 - CORRECT: "A trilobite from the Lower Cambrian of Córdoba (Spain) and its stratigraphical significance"
 - WRONG: "}} 59 | (446) | 387—399° | Frankfurt am Main, 18, 12. 1978"
+- WRONG: "Lemda-della Spzuy 1978" (this appears to be corrupted OCR text)
+- SKIP any text with symbols like |, °, }}, —, or that looks like page numbers/dates
 
 Return only the JSON object, no additional text."""
         
@@ -153,11 +155,14 @@ Please extract the following information and format as JSON:
 Guidelines:
 1. The TITLE is the text with the LARGEST font size that forms a complete research statement. It's NOT journal info or page numbers.
 2. Look for the highest [FONT_SIZE:XX] marker - that's likely the title
-3. Authors typically appear right after the title with smaller font
-4. Abstract usually starts with "Abstract" or similar heading
-5. If information is not available, use null for strings/arrays or 0 for numbers
+3. IGNORE text that contains: page numbers, journal references, copyright symbols (©), dates in header format, or bibliographic citations
+4. SKIP lines with patterns like "59 | (446) | 387—399°" or "Frankfurt am Main, 18, 12. 1978" - these are NOT titles
+5. The title should be a meaningful scientific statement like "A trilobite from the Lower Cambrian of Córdoba..."
+6. Authors typically appear right after the title with smaller font
+7. Abstract usually starts with "Abstract" or similar heading
+8. If information is not available, use null for strings/arrays or 0 for numbers
 
-IMPORTANT: Pay special attention to font sizes. The title will have the largest font size among all text elements.
+IMPORTANT: Pay special attention to font sizes AND content meaning. The title will have the largest font size among all text elements AND be a meaningful research topic, NOT page numbers or bibliographic info.
 
 Return only the JSON object, no additional text."""
         

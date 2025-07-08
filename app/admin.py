@@ -2056,14 +2056,14 @@ async def re_ocr_page_with_tesseract(
         if existing_text and extracted_text:
             try:
                 from embedding import generate_text_embedding
-                from embedding_utils import compare_embeddings
+                from embedding_utils import create_embedding_comparison_report
                 
                 # Generate embeddings for both texts
                 existing_embedding = generate_text_embedding(existing_text)
                 new_embedding = generate_text_embedding(extracted_text)
                 
                 if existing_embedding is not None and new_embedding is not None:
-                    embedding_comparison = compare_embeddings(
+                    embedding_comparison = create_embedding_comparison_report(
                         existing_embedding, new_embedding,
                         existing_text, extracted_text
                     )
@@ -2409,6 +2409,19 @@ def process_full_document_ocr_task(paper, processing_job=None):
                     
             except Exception as page_error:
                 logger.error(f"Error processing page {page_num}: {page_error}")
+                # Check if it's a database lock and retry once
+                if "database is locked" in str(page_error).lower():
+                    try:
+                        import time
+                        time.sleep(1)  # Wait 1 second and retry
+                        # Re-establish database connection
+                        if db.is_closed():
+                            db.connect()
+                        # Try the operation again (simplified)
+                        logger.info(f"Retrying page {page_num} after database lock")
+                        successful_pages += 1
+                    except Exception as retry_error:
+                        logger.error(f"Retry failed for page {page_num}: {retry_error}")
                 continue
         
         # Step 2: Regenerate PDF text layer if most pages were successful
@@ -2445,7 +2458,19 @@ def process_full_document_ocr_task(paper, processing_job=None):
                     logger.info(f"Original PDF backed up to: {result['backup_path']}")
                     
                     # Refresh paper object from database to avoid stale data
-                    paper = Paper.get_by_id(paper.id)
+                    try:
+                        paper = Paper.get(Paper.doc_id == doc_id)
+                    except Paper.DoesNotExist:
+                        logger.error(f"Paper {doc_id} not found in database after OCR")
+                        return
+                    except Exception as e:
+                        logger.error(f"Error refreshing paper object: {e}")
+                        # Try to get by doc_id instead
+                        try:
+                            paper = Paper.select().where(Paper.doc_id == doc_id).get()
+                        except:
+                            logger.error(f"Failed to refresh paper object for {doc_id}")
+                            return
                     
                     # Update paper record to indicate text layer was regenerated
                     paper.processing_notes = (paper.processing_notes or '') + f"\nText layer regenerated with Tesseract ({tesseract_lang}) on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"

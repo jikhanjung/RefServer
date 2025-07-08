@@ -147,7 +147,7 @@ RefServer/
 - **Tesseract**: 다국어 OCR backend
 - **PyMuPDF/pdf2image**: PDF → 텍스트/이미지
 - **Ollama + LLaVA**: OCR 품질 평가 및 LLM 기반 메타데이터 추출
-- **Huridocs layout server**: PDF 구조 분석
+- **Huridocs layout server**: PDF 구조 분석 (선택사항, 기본 비활성화)
 - **bge-m3**: 임베딩 모델
 - **SQLite**: 경량 DB
 - **ChromaDB**: 벡터 데이터베이스
@@ -275,6 +275,10 @@ ollama run llama3.2     # 메타데이터 추출용
 docker-compose up --build
 ```
 
+**참고**: Huridocs 레이아웃 분석은 기본적으로 비활성화되어 있습니다. 활성화하려면:
+- `docker-compose.yml`에서 huridocs-layout 서비스 주석 해제
+- `HURIDOCS_LAYOUT_URL` 환경변수를 `http://huridocs-layout:5060`으로 변경
+
 #### CPU 전용 환경 (핵심 기능만)
 1. **Ollama 모델 준비**
 ```bash
@@ -354,7 +358,7 @@ python test_api.py --pdf /path/to/paper.pdf
 ### 서비스 의존성
 - **데이터베이스**: SQLite (자동 초기화)
 - **Ollama**: 외부 실행 필요 (`host.docker.internal:11434`)
-- **Huridocs**: Docker 컨테이너로 자동 실행
+- **Huridocs**: 기본적으로 비활성화 (선택적으로 활성화 가능)
 - **BGE-M3**: 로컬 모델 사용 (컨테이너 내 포함)
 
 ### 파일 저장 구조

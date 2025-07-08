@@ -9,24 +9,26 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - OLLAMA_HOST=host.docker.internal:11434
-      - HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060
-    depends_on:
-      - huridocs-layout
+      - HURIDOCS_LAYOUT_URL=disabled  # Disabled by default - change to http://huridocs-layout:5060 to enable
+    # depends_on:
+    #   - huridocs-layout  # Commented out since Huridocs is disabled by default
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  huridocs-layout:
-    image: honestjung/pdf-layout-custom:latest
-    container_name: huridocs-layout
-    ports:
-      - "8061:5060"  # Map external 8061 to internal 5060
-    environment:
-      - WORKERS=2
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
-    runtime: nvidia
-    restart: unless-stopped
+  # huridocs-layout:
+  #   # Uncomment this service if you want to enable Huridocs layout analysis
+  #   # and change HURIDOCS_LAYOUT_URL to http://huridocs-layout:5060
+  #   image: honestjung/pdf-layout-custom:latest
+  #   container_name: huridocs-layout
+  #   ports:
+  #     - "8061:5060"  # Map external 8061 to internal 5060
+  #   environment:
+  #     - WORKERS=2
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
+  #   runtime: nvidia
+  #   restart: unless-stopped

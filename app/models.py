@@ -159,7 +159,14 @@ class Metadata(BaseModel):
     def get_authors_list(self):
         """Return authors as Python list"""
         if self.authors:
-            return json.loads(self.authors)
+            try:
+                return json.loads(self.authors)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Invalid authors JSON for paper {self.doc_id}: {e}")
+                # Try to handle as simple string
+                if isinstance(self.authors, str):
+                    return [author.strip() for author in self.authors.split(',') if author.strip()]
+                return []
         return []
     
     def set_authors_list(self, authors_list):

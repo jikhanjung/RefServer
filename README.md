@@ -64,7 +64,7 @@ RefServer는 학술 논문 PDF 파일을 업로드하면 **하이브리드 언�
 - **🔍 하이브리드 언어 감지 OCR**: 텍스트/LLaVA/다중OCR 3단계 + 10개 언어 완벽 지원
 - **🎯 품질 평가**: LLaVA 기반 OCR 품질 점수 및 개선 제안
 - **🧠 임베딩 생성**: BGE-M3 모델로 페이지별 1024차원 벡터 → ChromaDB 저장
-- **📐 레이아웃 분석**: Huridocs API로 텍스트/도표/그림 요소 구조 분석
+- **📐 레이아웃 분석**: Huridocs API로 텍스트/도표/그림 요소 구조 분석 (선택사항)
 - **📚 메타데이터 추출**: LLM 기반 제목/저자/저널/DOI/초록 추출
 - **💾 백업 보호 저장**: SQLite(메타데이터) + ChromaDB(벡터) + 자동 백업 보호
 
@@ -238,7 +238,7 @@ docker-compose -f docker-compose.cpu.yml up --build
 | **텍스트 추출 및 임베딩** | ✅ | ✅ | BGE-M3 모델 사용 |
 | **메타데이터 추출** | ✅ | ✅ | Llama 3.2 기반 (CPU에서도 실행) |
 | **OCR 품질 평가** | ✅ | ❌ | LLaVA 이미지 처리 (GPU 필요) |
-| **레이아웃 분석** | ✅ | ❌ | Huridocs GPU 가속 |
+| **레이아웃 분석** | ✅ | ❌ | Huridocs GPU 가속 (기본 비활성화) |
 | **관리자 인터페이스** | ✅ | ✅ | 웹 기반 관리 도구 |
 | **Rule-based Fallback** | ✅ | ✅ | 외부 서비스 장애 시 대체 처리 |
 
@@ -320,7 +320,7 @@ python tests/test_api.py
 - ✅ **관리자 인터페이스**: 백업 관리, 일관성 체크, 시스템 모니터링 UI
 - ✅ **OCR + 10개 언어 자동 감지**
 - ✅ **BGE-M3 임베딩 생성 (1024차원)**
-- ✅ **Huridocs 레이아웃 분석**
+- ✅ **Huridocs 레이아웃 분석** (선택사항, 기본 비활성화)
 - ✅ **LLM 기반 메타데이터 추출**
 - ✅ **중복 컨텐츠 스마트 처리**
 - ✅ **정확한 단계별 진행률 추적**
@@ -434,7 +434,7 @@ RefServer의 테스트 시스템은 서버의 실제 환경(GPU/CPU)을 자동�
 #### 📊 환경별 테스트 전략
 | 환경 | 테스트 기대값 | 성공 기준 | 특징 |
 |------|-------------|----------|------|
-| **🎮 GPU** | 모든 기능 정상 | 90%+ | LLaVA 품질평가 + Huridocs 레이아웃 + LLM 메타데이터 |
+| **🎮 GPU** | 모든 기능 정상 | 90%+ | LLaVA 품질평가 + Huridocs 레이아웃(선택) + LLM 메타데이터 |
 | **🖥️ CPU** | 핵심 기능 정상 | 70%+ | OCR + 임베딩 + Rule-based 메타데이터 (GPU 기능 제외) |
 | **⚠️ 최소** | 기본 기능만 | 50%+ | OCR + 기본 처리만 가능 |
 
@@ -444,7 +444,7 @@ RefServer의 테스트 시스템은 서버의 실제 환경(GPU/CPU)을 자동�
 GET /status → {"quality_assessment": true, "layout_analysis": true, ...}
 
 # 2. 환경별 테스트 수행
-if GPU모드: 모든 기능 테스트 (LLaVA, Huridocs 포함)
+if GPU모드: 모든 기능 테스트 (LLaVA, Huridocs 선택적 포함)
 if CPU모드: 핵심 기능 테스트 (Fallback 처리 확인)
 
 # 3. 환경에 맞는 성공 기준 적용
@@ -477,7 +477,7 @@ RefServer/ (v0.1.7 완전 구현)
 │   ├── 🔍 ocr.py              # OCR + 10개 언어 자동 감지 ✅
 │   ├── 🎯 ocr_quality.py      # LLaVA 품질 평가 (via Ollama) ✅
 │   ├── 🧠 embedding.py        # BGE-M3 페이지별 임베딩 + 로컬 모델 ✅
-│   ├── 📐 layout.py           # Huridocs 레이아웃 분석 ✅
+│   ├── 📐 layout.py           # Huridocs 레이아웃 분석 (선택사항) ✅
 │   ├── 📚 metadata.py         # 3단계 LLM 메타데이터 추출 ✅
 │   ├── 🔐 admin.py            # Jinja2 관리자 인터페이스 ✅
 │   ├── 🛡️ auth.py             # JWT 인증 + bcrypt 해싱 ✅
@@ -514,7 +514,7 @@ RefServer/ (v0.1.7 완전 구현)
      ↓
 4️⃣ 페이지별 BGE-M3 임베딩 생성
      ↓
-5️⃣ Huridocs 레이아웃 분석
+5️⃣ Huridocs 레이아웃 분석 (선택사항)
      ↓
 6️⃣ LLM 메타데이터 추출
      ↓
@@ -529,7 +529,7 @@ RefServer/ (v0.1.7 완전 구현)
   - BGE-M3 (임베딩) - 로컬 모델 (Docker 이미지 포함)
   - LLaVA (품질 평가) - via Ollama
   - Llama 3.2 (메타데이터) - via Ollama
-- **📐 Layout**: Huridocs PDF Document Layout Analysis
+- **📐 Layout**: Huridocs PDF Document Layout Analysis (선택사항, 기본 비활성화)
 - **🐳 Deployment**: Docker + Docker Compose
 
 ### Docker 이미지 정보
@@ -544,7 +544,7 @@ RefServer/ (v0.1.7 완전 구현)
 ```bash
 # Docker Compose 환경변수
 OLLAMA_HOST=host.docker.internal:11434    # Ollama 서버 주소
-HURIDOCS_LAYOUT_URL=http://huridocs-layout:5060  # Huridocs 서비스 (내부 포트 5060)
+HURIDOCS_LAYOUT_URL=disabled  # Huridocs 서비스 (기본 비활성화, 활성화시 http://huridocs-layout:5060)
 
 # 데이터 볼륨
 ./data:/data    # 호스트 data 디렉토리를 컨테이너에 마운트

@@ -648,7 +648,7 @@ def perform_ocr(input_pdf_path, output_pdf_path, language='eng', force_ocr=False
             'clean': True,
             'clean_final': True,
             'unpaper_args': '--layout double',
-            'tesseract_config': ['--psm', '4'],  # Single column with paragraphs
+            'tesseract_config': '--psm 4',  # Single column with paragraphs
         }
         
         # Perform OCR
@@ -716,7 +716,7 @@ def regenerate_pdf_text_layer(input_pdf_path, output_pdf_path, language='eng', b
             'remove_background': False,  # Preserve original appearance
             'rotate_pages': True,
             'skip_text': False,  # Include text layer
-            'tesseract_config': ['--psm 4']  # Single column with paragraphs
+            'tesseract_config': '--psm 4'  # Single column with paragraphs
         }
         
         # Perform OCR with text layer regeneration
