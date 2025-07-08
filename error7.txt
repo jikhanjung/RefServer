@@ -1,0 +1,23 @@
+refserver  | 2025-07-08 07:05:37,838 - ocr - INFO - Regenerating PDF text layer with language: eng
+refserver  | 2025-07-08 07:05:37,848 - ocr - ERROR - PDF text layer regeneration failed: argument --tesseract-config: expected one argument
+refserver  | 2025-07-08 07:05:37,848 - admin - ERROR - Failed to regenerate PDF text layer: argument --tesseract-config: expected one argument
+refserver  | 2025-07-08 07:05:37,848 - admin - INFO - Step 3: Updating document-level embedding...
+refserver  | 2025-07-08 07:05:37,856 - embedding - INFO - Text split into 7 chunks
+refserver  | 2025-07-08 07:05:53,478 - embedding - INFO - Generated averaged embedding from 7 chunks
+refserver  | 2025-07-08 07:05:53,478 - embedding - INFO - Generated embedding with shape (1024,)
+refserver  | 2025-07-08 07:05:53,488 - admin - INFO - Updated document-level embedding for de969845-525e-4596-bdf5-81a6bb564421
+refserver  | 2025-07-08 07:05:53,489 - admin - INFO - Step 4: Re-extracting paper metadata from improved OCR text...
+refserver  | 2025-07-08 07:05:53,497 - ocr - INFO - Extracted formatted text from page 1
+refserver  | 2025-07-08 07:05:53,503 - ocr - INFO - Extracted formatted text from page 2
+refserver  | 2025-07-08 07:05:53,503 - admin - INFO - Using formatted text with font size information for metadata extraction
+refserver  | 2025-07-08 07:05:53,503 - admin - INFO - Metadata extraction will use 4143 chars of formatted text
+refserver  | 2025-07-08 07:05:53,503 - metadata - INFO - Starting metadata extraction with LLM
+refserver  | 2025-07-08 07:05:53,503 - metadata - INFO - Sending metadata extraction request to LLM...
+refserver  | 2025-07-08 07:05:55,050 - metadata - INFO - LLM metadata extraction completed
+refserver  | 2025-07-08 07:05:55,050 - metadata - INFO - Metadata extraction successful: 'Das Kambrium Späneicm' by 2 authors (1961) using structured_llm
+refserver  | 2025-07-08 07:05:55,064 - admin - INFO - Updated metadata for de969845-525e-4596-bdf5-81a6bb564421 with ReOCR results
+refserver  | 2025-07-08 07:05:55,064 - admin - INFO - Extracted title: Das Kambrium Späneicm
+refserver  | 2025-07-08 07:05:55,064 - admin - INFO - Extracted authors: ['LOT7F', 'RICHTER']
+refserver  | 2025-07-08 07:05:55,065 - admin - INFO - Metadata extraction used 4143 chars from first 2 pages
+refserver  | 2025-07-08 07:05:55,065 - admin - INFO - Full document OCR completed for de969845-525e-4596-bdf5-81a6bb564421
+
