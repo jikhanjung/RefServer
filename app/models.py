@@ -163,9 +163,21 @@ class Metadata(BaseModel):
                 return json.loads(self.authors)
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(f"Invalid authors JSON for paper {getattr(self.paper, 'doc_id', 'unknown') if hasattr(self, 'paper') else 'unknown'}: {e}")
-                # Try to handle as simple string
+                # Try to handle as simple string  
                 if isinstance(self.authors, str):
-                    return [author.strip() for author in self.authors.split(',') if author.strip()]
+                    authors_str = self.authors.strip()
+                    # Check if it's a JSON-like list string: ["name1", "name2"] but stored as string
+                    if authors_str.startswith('[') and authors_str.endswith(']'):
+                        try:
+                            # Try to parse as JSON list again with better handling
+                            authors_list = json.loads(authors_str)
+                            if isinstance(authors_list, list):
+                                return [str(auth).strip() for auth in authors_list if auth]
+                        except json.JSONDecodeError:
+                            pass  # Fall through to comma-separated parsing
+                    
+                    # Fall back to comma-separated parsing
+                    return [author.strip() for author in authors_str.split(',') if author.strip()]
                 return []
         return []
     
@@ -176,7 +188,26 @@ class Metadata(BaseModel):
     def get_keywords_list(self):
         """Return keywords as Python list"""
         if self.keywords:
-            return json.loads(self.keywords)
+            try:
+                return json.loads(self.keywords)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Invalid keywords JSON for paper {getattr(self.paper, 'doc_id', 'unknown') if hasattr(self, 'paper') else 'unknown'}: {e}")
+                # Try to handle as simple string
+                if isinstance(self.keywords, str):
+                    keywords_str = self.keywords.strip()
+                    # Check if it's a JSON-like list string: ["keyword1", "keyword2"] but stored as string
+                    if keywords_str.startswith('[') and keywords_str.endswith(']'):
+                        try:
+                            # Try to parse as JSON list again with better handling
+                            keywords_list = json.loads(keywords_str)
+                            if isinstance(keywords_list, list):
+                                return [str(kw).strip() for kw in keywords_list if kw]
+                        except json.JSONDecodeError:
+                            pass  # Fall through to comma-separated parsing
+                    
+                    # Fall back to comma-separated parsing
+                    return [keyword.strip() for keyword in keywords_str.split(',') if keyword.strip()]
+                return []
         return []
     
     def set_keywords_list(self, keywords_list):

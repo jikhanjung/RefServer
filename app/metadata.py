@@ -535,8 +535,28 @@ Be concise and accurate."""
                     # Handle case where authors is a string
                     authors_str = metadata['authors'].strip()
                     if authors_str and authors_str.lower() not in ['null', 'none', 'n/a']:
-                        authors = [auth.strip() for auth in re.split(r'[,;]|and', authors_str)]
-                        cleaned['authors'] = [auth for auth in authors if auth]
+                        # Check if it's a JSON-like list string: ["name1", "name2"]
+                        if authors_str.startswith('[') and authors_str.endswith(']'):
+                            try:
+                                # Try to parse as JSON list
+                                authors_list = json.loads(authors_str)
+                                if isinstance(authors_list, list):
+                                    authors = [str(auth).strip() for auth in authors_list if auth]
+                                    authors = [auth for auth in authors if auth.lower() not in ['null', 'none', 'n/a']]
+                                    if authors:
+                                        cleaned['authors'] = authors
+                                else:
+                                    # Fall back to simple parsing
+                                    authors = [auth.strip() for auth in re.split(r'[,;]|and', authors_str)]
+                                    cleaned['authors'] = [auth for auth in authors if auth]
+                            except json.JSONDecodeError:
+                                # Fall back to simple parsing if JSON parsing fails
+                                authors = [auth.strip() for auth in re.split(r'[,;]|and', authors_str)]
+                                cleaned['authors'] = [auth for auth in authors if auth]
+                        else:
+                            # Simple string parsing
+                            authors = [auth.strip() for auth in re.split(r'[,;]|and', authors_str)]
+                            cleaned['authors'] = [auth for auth in authors if auth]
             
             # Year
             if metadata.get('year'):
@@ -572,6 +592,32 @@ Be concise and accurate."""
                     keywords = [kw for kw in keywords if kw.lower() not in ['null', 'none', 'n/a']]
                     if keywords:
                         cleaned['keywords'] = keywords
+                elif isinstance(metadata['keywords'], str):
+                    # Handle case where keywords is a string
+                    keywords_str = metadata['keywords'].strip()
+                    if keywords_str and keywords_str.lower() not in ['null', 'none', 'n/a']:
+                        # Check if it's a JSON-like list string: ["keyword1", "keyword2"]
+                        if keywords_str.startswith('[') and keywords_str.endswith(']'):
+                            try:
+                                # Try to parse as JSON list
+                                keywords_list = json.loads(keywords_str)
+                                if isinstance(keywords_list, list):
+                                    keywords = [str(kw).strip() for kw in keywords_list if kw]
+                                    keywords = [kw for kw in keywords if kw.lower() not in ['null', 'none', 'n/a']]
+                                    if keywords:
+                                        cleaned['keywords'] = keywords
+                                else:
+                                    # Fall back to simple parsing
+                                    keywords = [kw.strip() for kw in re.split(r'[,;]', keywords_str)]
+                                    cleaned['keywords'] = [kw for kw in keywords if kw]
+                            except json.JSONDecodeError:
+                                # Fall back to simple parsing if JSON parsing fails
+                                keywords = [kw.strip() for kw in re.split(r'[,;]', keywords_str)]
+                                cleaned['keywords'] = [kw for kw in keywords if kw]
+                        else:
+                            # Simple string parsing
+                            keywords = [kw.strip() for kw in re.split(r'[,;]', keywords_str)]
+                            cleaned['keywords'] = [kw for kw in keywords if kw]
             
             # Other fields
             for field in ['volume', 'issue', 'pages', 'publisher', 'institution', 'email']:
