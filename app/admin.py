@@ -2316,7 +2316,8 @@ def process_full_document_ocr_task(paper, processing_job=None):
         import tempfile
         
         pdf_path = paper.file_path
-        logger.info(f"Processing full document OCR for {paper.doc_id}")
+        doc_id = paper.doc_id  # Store doc_id for later use
+        logger.info(f"Processing full document OCR for {doc_id}")
         logger.info(f"PDF path: {pdf_path}")
         
         # Verify PDF file exists

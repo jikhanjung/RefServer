@@ -135,8 +135,8 @@ def compare_embeddings(old_embedding: List[float], new_embedding: List[float]) -
             'max_element_diff': float(np.max(element_wise_diff)),
             'mean_element_diff': float(np.mean(element_wise_diff)),
             'std_element_diff': float(np.std(element_wise_diff)),
-            'similarity_score': cosine_sim * 100,  # Percentage similarity
-            'is_significant_change': cosine_sim < 0.95  # Threshold for significant change
+            'similarity_score': float(cosine_sim) * 100,  # Percentage similarity
+            'is_significant_change': bool(float(cosine_sim) < 0.95)  # Threshold for significant change
         }
         
     except Exception as e:

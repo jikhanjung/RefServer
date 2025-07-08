@@ -162,7 +162,7 @@ class Metadata(BaseModel):
             try:
                 return json.loads(self.authors)
             except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Invalid authors JSON for paper {self.doc_id}: {e}")
+                logger.warning(f"Invalid authors JSON for paper {getattr(self.paper, 'doc_id', 'unknown') if hasattr(self, 'paper') else 'unknown'}: {e}")
                 # Try to handle as simple string
                 if isinstance(self.authors, str):
                     return [author.strip() for author in self.authors.split(',') if author.strip()]
